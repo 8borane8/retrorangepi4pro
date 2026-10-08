@@ -1428,23 +1428,23 @@ prepare_host()
 	# packages list for host
 	# NOTE: please sync any changes here with the Dockerfile and Vagrantfile
 
-	local hostdeps="acl aptly aria2 bc binfmt-support bison btrfs-progs       \
+	local hostdeps="acl aria2 bc binfmt-support bison btrfs-progs            \
 	build-essential  ca-certificates ccache cpio cryptsetup curl              \
 	debian-archive-keyring debian-keyring debootstrap device-tree-compiler    \
 	dialog dirmngr dosfstools dwarves f2fs-tools fakeroot flex gawk           \
 	gcc-arm-linux-gnueabihf gdisk gpg imagemagick jq kmod libbison-dev \
 	libc6-dev-armhf-cross libelf-dev libfdt-dev libfile-fcntllock-perl        \
-	libfl-dev liblz4-tool libncurses-dev libpython2.7-dev libssl-dev          \
+	libfl-dev liblz4-tool libncurses-dev libssl-dev                           \
 	libusb-1.0-0-dev linux-base locales lzop ncurses-base ncurses-term        \
-	nfs-kernel-server ntpdate p7zip-full parted patchutils pigz pixz          \
+	ntpdate p7zip-full parted patchutils pigz pixz                           \
 	pkg-config pv python3-dev python3-distutils qemu-user-static rsync swig   \
 	systemd-container u-boot-tools udev unzip uuid-dev wget whiptail zip      \
-	zlib1g-dev gcc-riscv64-linux-gnu uuid-runtime fatattr git-lfs scons       \
+	zlib1g-dev uuid-runtime fatattr git-lfs scons                             \
 	mtools"
 
   if [[ $(dpkg --print-architecture) == amd64 ]]; then
 
-	hostdeps+=" distcc lib32ncurses-dev lib32stdc++6 libc6-i386"
+	hostdeps+=" lib32ncurses-dev lib32stdc++6 libc6-i386"
 	grep -q i386 <(dpkg --print-foreign-architectures) || dpkg --add-architecture i386
 
   elif [[ $(dpkg --print-architecture) == arm64 ]]; then
@@ -1461,9 +1461,8 @@ prepare_host()
 
 	# Add support for Ubuntu 20.04, 21.04 and Mint 20.x
 	if [[ $HOSTRELEASE =~ ^(focal|hirsute|jammy|noble|noble|ulyana|ulyssa|bullseye|bookworm|trixie|uma)$ ]]; then
-		hostdeps+=" python2 python3"
-		ln -fs /usr/bin/python2.7 /usr/bin/python2
-		ln -fs /usr/bin/python2.7 /usr/bin/python
+		hostdeps+=" python3"
+		[[ -e /usr/bin/python ]] || ln -fs /usr/bin/python3 /usr/bin/python
 	else
 		hostdeps+=" python libpython-dev"
 	fi
@@ -1590,19 +1589,9 @@ prepare_host()
 				)
 			;;
 			*)
+			# U-Boot is built with arm-linux-gnueabi-gcc 7. Kernel and the PowerVR module need aarch64 gcc 11.
 			local toolchains=(
-				"ky-toolchain-linux-glibc-x86_64-v1.0.1.tar.xz"
-				"gcc-linaro-aarch64-none-elf-4.8-2013.11_linux.tar.xz"
-				"gcc-linaro-arm-none-eabi-4.8-2014.04_linux.tar.xz"
-				"gcc-linaro-arm-linux-gnueabihf-4.8-2014.04_linux.tar.xz"
-				"gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabi.tar.xz"
-				"gcc-linaro-4.9.4-2017.01-x86_64_aarch64-linux-gnu.tar.xz"
-				"gcc-linaro-5.5.0-2017.10-x86_64_arm-linux-gnueabihf.tar.xz"
 				"gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabi.tar.xz"
-				"gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu.tar.xz"
-				"gcc-arm-9.2-2019.12-x86_64-arm-none-linux-gnueabihf.tar.xz"
-				"gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu.tar.xz"
-				"gcc-arm-11.2-2022.02-x86_64-arm-none-linux-gnueabihf.tar.xz"
 				"gcc-arm-11.2-2022.02-x86_64-aarch64-none-linux-gnu.tar.xz"
 				)
 			;;

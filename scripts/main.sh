@@ -478,12 +478,6 @@ if [[ $BUILD_OPT == rootfs || $BUILD_OPT == image ]]; then
 	if [[ ! -f ${DEB_STORAGE}/orangepi-config_${REVISION}_all.deb ]]; then
 	
 		[[ "${REPOSITORY_INSTALL}" != *orangepi-config* ]] && compile_orangepi-config
-	fi 
-
-	# Compile orangepi-zsh if packed .deb does not exist or use the one from repository
-	if [[ ! -f ${DEB_STORAGE}/orangepi-zsh_${REVISION}_all.deb ]]; then
-
-	        [[ "${REPOSITORY_INSTALL}" != *orangepi-zsh* ]] && compile_orangepi-zsh
 	fi
 
 	# Compile plymouth-theme-orangepi if packed .deb does not exist or use the one from repository

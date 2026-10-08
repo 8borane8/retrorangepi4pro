@@ -27,21 +27,17 @@ function extension_prepare_config__gamepads() {
 
 function post_kernel_build__xpadneo() {
 	local src="${SRC}/.tmp/xpadneo"
-	if [[ ! -d "${src}/.git" ]]; then
+	local driver="${src}/hid-xpadneo/src"
+	# Upstream no longer ships hid-xpadneo.c. The module makefile lives in hid-xpadneo/src.
+	# A clone that predates that layout is replaced.
+	if [[ ! -f "${driver}/Makefile" ]]; then
 		display_alert "Fetching" "xpadneo" "info"
 		rm -rf "${src}"
-		git clone --depth 1 https://github.com/atar-axis/xpadneo.git "${src}"
+		git clone --depth 1 --branch master https://github.com/atar-axis/xpadneo.git "${src}" \
+			|| exit_with_error "xpadneo clone failed"
 	fi
+	[[ -f "${driver}/Makefile" ]] || exit_with_error "xpadneo module makefile is missing" "${driver}"
 
-	local cfile mdir
-	cfile="$(find "${src}" -name 'hid-xpadneo.c' | head -1)"
-	[[ -n "${cfile}" ]] || exit_with_error "xpadneo source has no hid-xpadneo.c"
-	mdir="$(dirname "${cfile}")"
-	if [[ ! -f "${mdir}/Makefile" ]] || ! grep -q 'obj-m' "${mdir}/Makefile"; then
-		echo 'obj-m += hid-xpadneo.o' > "${mdir}/Makefile"
-	fi
-
-	display_alert "Compiling" "hid-xpadneo" "info"
 	# compile_kernel leaves us in the tree that was just built. That tree is an overlay when overlayfs is on.
 	local kerneldir
 	if [[ -f Module.symvers ]]; then
@@ -51,11 +47,23 @@ function post_kernel_build__xpadneo() {
 	else
 		exit_with_error "Kernel tree is missing" "${LINUXSOURCEDIR}"
 	fi
-	eval env PATH="${toolchain}:${PATH}" \
-		make -C "${kerneldir}" M="${mdir}" ARCH="${ARCHITECTURE}" CROSS_COMPILE="${CCACHE} ${KERNEL_COMPILER}" modules \
+
+	local version
+	version="$(git -C "${src}" describe --tags --always --dirty 2>/dev/null || echo v0.10)"
+
+	# toolchain is local to compile_kernel. The install hook can call us after that function has returned.
+	local tc="${toolchain:-}"
+	if [[ -z "${tc}" ]]; then
+		tc="$(find_toolchain "${KERNEL_COMPILER}" "${KERNEL_USE_GCC}")"
+		[[ -n "${tc}" ]] || exit_with_error "Could not find required toolchain" "${KERNEL_COMPILER}gcc ${KERNEL_USE_GCC}"
+	fi
+
+	display_alert "Compiling" "hid-xpadneo ${version}" "info"
+	eval env PATH="${tc}:${PATH}" \
+		'make -C "$kerneldir" M="$driver" ARCH="$ARCHITECTURE" CROSS_COMPILE="$CCACHE $KERNEL_COMPILER" VERSION="$version" modules' \
 		|| exit_with_error "xpadneo module build failed"
 
-	XPADNEO_KO="$(find "${mdir}" -name 'hid-xpadneo.ko' | head -1)"
+	XPADNEO_KO="${driver}/hid-xpadneo.ko"
 	[[ -f "${XPADNEO_KO}" ]] || exit_with_error "hid-xpadneo.ko was not produced"
 }
 

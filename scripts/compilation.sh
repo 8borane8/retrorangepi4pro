@@ -237,6 +237,12 @@ compile_uboot()
 		[[ -n $UBOOT_TOOLCHAIN2 ]] && cross_compile="ORANGEPI=foe"; # empty parameter is not allowed
 
 		echo -e "\n\t== u-boot make $target_make ==\n" >> "${DEST}"/${LOG_SUBPATH}/compilation.log
+		# Allwinner copies the bin to $(LICHEE_OUT_DIR)/bin and $(LICHEE_PLAT_OUT). Empty values become /.
+		if [[ ${LINUXFAMILY} == sun60iw2 ]]; then
+			mkdir -p "${ubootdir}/.lichee-out/bin"
+			export LICHEE_OUT_DIR="${ubootdir}/.lichee-out"
+			export LICHEE_PLAT_OUT="${ubootdir}/.lichee-out"
+		fi
 		eval CCACHE_BASEDIR="$(pwd)" env PATH="${toolchain}:${toolchain2}:${PATH}" \
 			'make $target_make $CTHREADS \
 			"${cross_compile}"' 2>>"${DEST}"/${LOG_SUBPATH}/compilation.log \

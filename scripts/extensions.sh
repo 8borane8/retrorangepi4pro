@@ -341,8 +341,8 @@ show_caller_full() {
 }
 # can be called by board, family, config or user to make sure an extension is included.
 # single argument is the extension name.
-# will look for it in /userpatches/extensions first.
-# if not found there will look in /extensions
+# will look for it in /extensions, then external/extensions.
+# enable_app looks only in /apps.
 # if not found will exit 17
 declare -i enable_extension_recurse_counter=0
 declare -a enable_extension_recurse_stack
@@ -374,7 +374,14 @@ enable_extension() {
 	enable_extension_recurse_counter=$((enable_extension_recurse_counter + 1))
 
 	# there are many opportunities here. too many, actually. let userpatches override just some functions, etc.
-	for extension_base_path in "${SRC}/userpatches/extensions" "${EXTER}/extensions"; do
+	local -a extension_search_paths
+	if [[ -n "${EXTENSION_LOOKUP_ROOT}" ]]; then
+		extension_search_paths=("${EXTENSION_LOOKUP_ROOT}")
+	else
+		extension_search_paths=("${SRC}/extensions" "${EXTER}/extensions")
+	fi
+	local extension_base_path
+	for extension_base_path in "${extension_search_paths[@]}"; do
 		extension_dir="${extension_base_path}/${extension_name}"
 		extension_file_in_dir="${extension_dir}/${extension_name}.sh"
 		extension_floating_file="${extension_base_path}/${extension_name}.sh"
@@ -444,4 +451,9 @@ enable_extension() {
 		ENABLE_EXTENSION_TRACE_HINT="RECURSE ${stacktrace} ->" enable_extension "${stacked_extension}"
 	done
 
+}
+
+# Apps live in /apps and are not kernel extensions.
+enable_app() {
+	EXTENSION_LOOKUP_ROOT="${SRC}/apps" enable_extension "$1"
 }

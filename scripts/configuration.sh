@@ -14,7 +14,7 @@
 [[ -z $MAINTAINER ]] && MAINTAINER="Orange Pi" # deb signature
 [[ -z $MAINTAINERMAIL ]] && MAINTAINERMAIL="leeboby@aliyun.com" # deb signature
 [[ -z $DEB_COMPRESS ]] && DEB_COMPRESS="xz" # compress .debs with XZ by default. Use 'none' for faster/larger builds
-TZDATA=$(cat /etc/timezone) # Timezone for target is taken from host or defined here.
+[[ -z $TZDATA ]] && TZDATA=$(cat /etc/timezone) # Keep a timezone set in config/image.conf. Otherwise use the host.
 USEALLCORES=yes # Use all CPU cores for compiling
 HOSTRELEASE=$(cat /etc/os-release | grep VERSION_CODENAME | cut -d"=" -f2)
 [[ -z $HOSTRELEASE ]] && HOSTRELEASE=$(cut -d'/' -f1 /etc/debian_version)
@@ -149,11 +149,6 @@ ATF_COMPILE=yes
 	exit_with_error "Sources configuration not found" "$LINUXFAMILY"
 
 source "${EXTER}/config/sources/families/${LINUXFAMILY}.conf"
-
-if [[ -f $USERPATCHES_PATH/sources/families/$LINUXFAMILY.conf ]]; then
-	display_alert "Adding user provided $LINUXFAMILY overrides"
-	source "$USERPATCHES_PATH/sources/families/${LINUXFAMILY}.conf"
-fi
 
 # load architecture defaults
 source "${EXTER}/config/sources/${ARCH}.conf"
@@ -441,7 +436,6 @@ ${EXTER}/config/optional/_any_board/_config
 ${EXTER}/config/optional/architectures/${ARCH}/_config
 ${EXTER}/config/optional/families/${LINUXFAMILY}/_config
 ${EXTER}/config/optional/boards/${BOARD}/_config
-${USERPATCHES_PATH}
 "
 
 DEBOOTSTRAP_SEARCH_RELATIVE_DIRS="
@@ -625,19 +619,10 @@ if [[ -z ${ARMBIAN_MIRROR} ]]; then
 	done
 fi
 
-# For (late) user override.
-# Notice: it is too late to define hook functions or add extensions in lib.config, since the extension initialization already ran by now.
-#         in case the user tries to use them in lib.config, hopefully they'll be detected as "wishful hooking" and the user will be wrn'ed.
-if [[ -f $USERPATCHES_PATH/lib.config ]]; then
-	display_alert "Using user configuration override" "$USERPATCHES_PATH/lib.config" "info"
-	source "$USERPATCHES_PATH"/lib.config
-fi
-
 call_extension_method "user_config" << 'USER_CONFIG'
 *Invoke function with user override*
 Allows for overriding configuration values set anywhere else.
-It is called after sourcing the `lib.config` file if it exists,
-but before assembling any package lists.
+Called before assembling any package lists.
 USER_CONFIG
 
 call_extension_method "extension_prepare_config" << 'EXTENSION_PREPARE_CONFIG'

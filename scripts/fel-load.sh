@@ -26,12 +26,7 @@ fel_prepare_host()
 
 fel_prepare_target()
 {
-	if [[ -f $USERPATCHES_PATH/fel-boot.cmd ]]; then
-		display_alert "Using custom boot script" "userpatches/fel-boot.cmd" "info"
-		cp "$USERPATCHES_PATH"/fel-boot.cmd "${FEL_ROOTFS}"/boot/boot.cmd
-	else
-		cp "${EXTER}"/config/templates/fel-boot.cmd.template "${FEL_ROOTFS}"/boot/boot.cmd
-	fi
+	cp "${EXTER}"/config/templates/fel-boot.cmd.template "${FEL_ROOTFS}"/boot/boot.cmd
 	if [[ -z $FEL_LOCAL_IP ]]; then
 		FEL_LOCAL_IP=$(ifconfig "${NET_IFNAME}" | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
 	fi
@@ -73,12 +68,6 @@ fel_load()
 		write 0x43300000 "${FEL_ROOTFS}"/boot/uInitrd \
 		write 0x43100000 "${FEL_ROOTFS}"/boot/boot.scr
 }
-
-if [[ -f $USERPATCHES_PATH/fel-hooks.sh ]]; then
-	display_alert "Using additional FEL hooks in" "external/userpatches/fel-hooks.sh" "info"
-	# shellcheck source=/dev/null
-	source "$USERPATCHES_PATH"/fel-hooks.sh
-fi
 
 # basic sanity check
 if [[ -n $FEL_ROOTFS ]]; then

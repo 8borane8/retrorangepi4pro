@@ -1,1 +1,0 @@
-export TERM=${TERM:-linux}

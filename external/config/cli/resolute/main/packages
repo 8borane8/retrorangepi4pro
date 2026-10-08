@@ -28,7 +28,6 @@ man-db
 mmc-utils
 ncurses-term
 nano
-openssh-server
 parted
 psmisc
 rsync
@@ -40,5 +39,4 @@ tzdata
 u-boot-tools
 usbutils
 wget
-wireguard-tools
 wpasupplicant

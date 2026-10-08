@@ -158,7 +158,7 @@ get_package_list_hash()
 
 # create_sources_list <release> <basedir>
 #
-# <release>: buster|bullseye|bookworm|bionic|focal|jammy|noble|hirsute|sid
+# <release>: buster|bullseye|bookworm|trixie|bionic|focal|jammy|noble|resolute|hirsute|sid
 # <basedir>: path to root directory
 #
 create_sources_list()
@@ -243,7 +243,7 @@ create_sources_list()
 	EOF
 	;;
 
-	noble)
+	noble|resolute)
 	distro="ubuntu"
 	# Drop deboostrap sources leftovers
 	rm -f "${basedir}/etc/apt/sources.list"
@@ -1533,6 +1533,15 @@ prepare_host()
 	install_pkg_deb "autoupdate $hostdeps"
 	unset LOG_OUTPUT_FILE
 
+	# Ubuntu 22.04 debootstrap has no script for newer suites. Each Ubuntu script is a symlink to gutsy, each Debian script to sid.
+	local debootstrap_scripts="/usr/share/debootstrap/scripts"
+	local debootstrap_base="sid"
+	[[ "${DISTRIBUTION}" == "Ubuntu" ]] && debootstrap_base="gutsy"
+	if [[ ! -e "${debootstrap_scripts}/${RELEASE}" && -e "${debootstrap_scripts}/${debootstrap_base}" ]]; then
+		ln -sfn "${debootstrap_base}" "${debootstrap_scripts}/${RELEASE}"
+		display_alert "Debootstrap has no script for this release" "${RELEASE} -> ${debootstrap_base}" "info"
+	fi
+
 	update-ccache-symlinks
 
 	export FINAL_HOST_DEPS="$hostdeps ${EXTRA_BUILD_DEPS}"
@@ -1550,16 +1559,16 @@ prepare_host()
 	fi
 
 	# create directory structure
-	mkdir -p $SRC/output $EXTER/cache $USERPATCHES_PATH
+	mkdir -p $SRC/output $EXTER/cache
 	if [[ -n $SUDO_USER ]]; then
-		chgrp --quiet sudo cache output "${USERPATCHES_PATH}"
+		chgrp --quiet sudo cache output
 		# SGID bit on cache/sources breaks kernel dpkg packaging
-		chmod --quiet g+w,g+s output "${USERPATCHES_PATH}"
+		chmod --quiet g+w,g+s output
 		# fix existing permissions
-		find "${SRC}"/output "${USERPATCHES_PATH}" -type d ! -group sudo -exec chgrp --quiet sudo {} \;
-		find "${SRC}"/output "${USERPATCHES_PATH}" -type d ! -perm -g+w,g+s -exec chmod --quiet g+w,g+s {} \;
+		find "${SRC}"/output -type d ! -group sudo -exec chgrp --quiet sudo {} \;
+		find "${SRC}"/output -type d ! -perm -g+w,g+s -exec chmod --quiet g+w,g+s {} \;
 	fi
-	mkdir -p $DEST/debs/{extra,u-boot}  $DEST/{config,debug,patch,images} $USERPATCHES_PATH/overlay $EXTER/cache/{debs,sources,hash} $SRC/toolchains  $SRC/.tmp
+	mkdir -p $DEST/debs/{extra,u-boot}  $DEST/{config,debug,patch,images} $EXTER/cache/{debs,sources,hash} $SRC/toolchains  $SRC/.tmp
 
 	# build aarch64
 	if [[ $(dpkg --print-architecture) == amd64 ]]; then
@@ -1635,17 +1644,6 @@ prepare_host()
 			test -e /proc/sys/fs/binfmt_misc/qemu-arm || update-binfmts --enable qemu-arm
 			test -e /proc/sys/fs/binfmt_misc/qemu-aarch64 || update-binfmts --enable qemu-aarch64
 		fi
-	fi
-
-	[[ ! -f "${USERPATCHES_PATH}"/customize-image.sh ]] && cp "${EXTER}"/config/templates/customize-image.sh.template "${USERPATCHES_PATH}"/customize-image.sh
-
-	if [[ ! -f "${USERPATCHES_PATH}"/README ]]; then
-		rm -f "${USERPATCHES_PATH}"/readme.txt
-		echo 'Please read documentation about customizing build configuration' > "${USERPATCHES_PATH}"/README
-		echo 'https:/www.orangepi.org' >> "${USERPATCHES_PATH}"/README
-
-		# create patches directory structure under USERPATCHES_PATH
-		find $EXTER/patch -maxdepth 2 -type d ! -name . | sed "s%/.*patch%/$USERPATCHES_PATH%" | xargs mkdir -p
 	fi
 
 	# check free space (basic)
@@ -1920,18 +1918,6 @@ install_wiringop()
 {
 	install_deb_chroot "$EXTER/cache/debs/${ARCH}/wiringpi-2.58-1.deb"
 	chroot "${SDCARD}" /bin/bash -c "apt-mark hold wiringpi" >> "${DEST}"/${LOG_SUBPATH}/install.log 2>&1
-
-	if [[ ${IGNORE_UPDATES} != yes ]]; then
-
-		local url=$(get_orangepi_url)
-		fetch_from_repo "${url}/wiringOP.git" "${EXTER}/cache/sources/wiringOP" "branch:next" "yes"
-		fetch_from_repo "${url}/wiringOP-Python.git" "${EXTER}/cache/sources/wiringOP-Python" "branch:next" "yes"
-
-	fi
-
-	cp ${EXTER}/cache/sources/wiringOP/next ${SDCARD}/usr/src/wiringOP -rfa
-	cp ${EXTER}/cache/sources/wiringOP-Python/next ${SDCARD}/usr/src/wiringOP-Python -rfa
-
 	rm $SDCARD/root/*.deb >/dev/null 2>&1
 }
 

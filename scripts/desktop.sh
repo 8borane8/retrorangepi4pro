@@ -260,7 +260,11 @@ add_desktop_package_sources() {
 	ls -l "${SDCARD}/usr/share/keyrings" >> "${DEST}"/${LOG_SUBPATH}/install.log
 	ls -l "${SDCARD}/etc/apt/sources.list.d" >> "${DEST}"/${LOG_SUBPATH}/install.log
 	[[ -f "${SDCARD}/etc/apt/sources.list" ]] && cat "${SDCARD}/etc/apt/sources.list" >> "${DEST}"/${LOG_SUBPATH}/install.log
-	cat "${SDCARD}/etc/apt/sources.list.d/"*.list "${SDCARD}/etc/apt/sources.list.d/"*.sources 2>/dev/null >> "${DEST}"/${LOG_SUBPATH}/install.log
+	# nullglob is left on by advanced_patch. An empty match would make cat read stdin and stall the build.
+	local apt_source_dump=()
+	shopt -s nullglob
+	apt_source_dump=( "${SDCARD}/etc/apt/sources.list.d/"*.list "${SDCARD}/etc/apt/sources.list.d/"*.sources )
+	[[ ${#apt_source_dump[@]} -gt 0 ]] && cat "${apt_source_dump[@]}" >> "${DEST}"/${LOG_SUBPATH}/install.log
 
 }
 

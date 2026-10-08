@@ -37,11 +37,7 @@ create_board_package()
 
 		# create extlinux config file
 		if [[ $SRC_EXTLINUX != yes ]]; then
-			if [ -f "${USERPATCHES_PATH}/bootscripts/${bootscript_src}" ]; then
-			  cp "${USERPATCHES_PATH}/bootscripts/${bootscript_src}" "${destination}/usr/share/orangepi/${bootscript_dst}"
-			else
-			  cp "${EXTER}/config/bootscripts/${bootscript_src}" "${destination}/usr/share/orangepi/${bootscript_dst}"
-			fi
+			cp "${EXTER}/config/bootscripts/${bootscript_src}" "${destination}/usr/share/orangepi/${bootscript_dst}"
 			[[ -n $BOOTENV_FILE && -f $SRC/config/bootenv/$BOOTENV_FILE ]] && \
 				cp "${EXTER}/config/bootenv/${BOOTENV_FILE}" "${destination}"/usr/share/orangepi/orangepiEnv.txt
 		fi

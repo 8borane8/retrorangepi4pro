@@ -369,6 +369,59 @@ create_linux-source_package ()
 	rm -rf "${tmp_src_dir}"
 }
 
+compile_sun60iw2_gpu_module()
+{
+	[[ ${LINUXFAMILY} == sun60iw2 ]] || return 0
+
+	local kerneldir="${1:-${LINUXSOURCEDIR}}"
+	[[ -d "${kerneldir}/bsp/modules/gpu" ]] || exit_with_error "GPU sources missing" "${kerneldir}/bsp/modules/gpu"
+
+	local gcc_bin="" toolchain="" gpu_prefix="" gpu_cross="" gpu_out=""
+	gcc_bin=$(find "${SRC}/toolchains" -type f -path '*11.2-2022.02*aarch64-none-linux-gnu-gcc' 2>/dev/null | head -1)
+	if [[ -n ${gcc_bin} ]]; then
+		toolchain=$(dirname "${gcc_bin}")
+		gpu_prefix="aarch64-none-linux-gnu-"
+		gpu_cross="${toolchain}/${gpu_prefix}"
+	elif ! dpkg-architecture -e "${ARCH}" >/dev/null 2>&1; then
+		toolchain=$(find_toolchain "${KERNEL_COMPILER}" "${KERNEL_USE_GCC}" | head -1)
+		gpu_prefix="${KERNEL_COMPILER}"
+		gpu_cross="${toolchain}/${gpu_prefix}"
+		[[ -x "${gpu_cross}gcc" ]] || exit_with_error "Could not find required toolchain" "${KERNEL_COMPILER}gcc ${KERNEL_USE_GCC}"
+	else
+		toolchain="/usr/bin"
+		gpu_prefix="${KERNEL_COMPILER}"
+		gpu_cross="${gpu_prefix}"
+	fi
+
+	gpu_out="${SRC}/.tmp/gpu_modules_${LINUXFAMILY}"
+	mkdir -p "${gpu_out}"
+	rm -rf "${kerneldir}/bsp/modules/gpu/img-bxm/linux/rogue_km/binary_sunxi_linux_"*
+
+	display_alert "Compiling GPU module" "pvrsrvkm $("${gpu_cross}gcc" -dumpversion)" "info"
+
+	make -C "${kerneldir}/bsp/modules/gpu" \
+		LICHEE_TOOLCHAIN_PATH="${toolchain}" \
+		LICHEE_CROSS_COMPILER="${gpu_prefix}" \
+		LICHEE_PLATFORM=linux \
+		LICHEE_MOD_DIR="${gpu_out}" \
+		LICHEE_KERN_DIR="${kerneldir}" \
+		CROSS_COMPILE="${gpu_cross}" \
+		ARCH="${ARCHITECTURE}" \
+		|| exit_with_error "GPU module was not built" "pvrsrvkm"
+
+	make -C "${kerneldir}/bsp/modules/gpu" modules_install \
+		LICHEE_TOOLCHAIN_PATH="${toolchain}" \
+		LICHEE_CROSS_COMPILER="${gpu_prefix}" \
+		LICHEE_PLATFORM=linux \
+		LICHEE_MOD_DIR="${gpu_out}" \
+		LICHEE_KERN_DIR="${kerneldir}" \
+		CROSS_COMPILE="${gpu_cross}" \
+		ARCH="${ARCHITECTURE}" \
+		|| exit_with_error "GPU module install failed" "pvrsrvkm"
+
+	[[ -f "${gpu_out}/pvrsrvkm.ko" ]] || exit_with_error "pvrsrvkm.ko missing" "${gpu_out}/pvrsrvkm.ko"
+}
+
 compile_kernel()
 {
 	if [[ $CLEAN_LEVEL == *make* ]]; then
@@ -435,13 +488,8 @@ compile_kernel()
 		display_alert "Using previous kernel config" "${DEST}/config/$LINUXCONFIG.config" "info"
 		cp -p "${DEST}/config/${LINUXCONFIG}.config" .config
 	else
-		if [[ -f $USERPATCHES_PATH/$LINUXCONFIG.config ]]; then
-			display_alert "Using kernel config provided by user" "userpatches/$LINUXCONFIG.config" "info"
-			cp -p "${USERPATCHES_PATH}/${LINUXCONFIG}.config" .config
-		else
-			display_alert "Using kernel config file" "${EXTER}/config/kernel/$LINUXCONFIG.config" "info"
-			cp -p "${EXTER}/config/kernel/${LINUXCONFIG}.config" .config
-		fi
+		display_alert "Using kernel config file" "${EXTER}/config/kernel/$LINUXCONFIG.config" "info"
+		cp -p "${EXTER}/config/kernel/${LINUXCONFIG}.config" .config
 	fi
 
 	call_extension_method "custom_kernel_config" << 'CUSTOM_KERNEL_CONFIG'
@@ -507,6 +555,11 @@ CUSTOM_KERNEL_CONFIG
 		exit_with_error "Kernel was not built" "@host"
 	fi
 
+	call_extension_method "post_kernel_build" << 'POST_KERNEL_BUILD'
+*Kernel image and modules are built, packages are not created yet*
+The current directory is the kernel tree. CROSS_COMPILE is available as KERNEL_COMPILER and toolchain.
+POST_KERNEL_BUILD
+
 	if [[ ${BOARDFAMILY} == cix ]]; then
 		[[ -d ${SRC}/output/cix ]] && rm -rf ${SRC}/output/cix
 		mkdir -p ${SRC}/output/cix/ > /dev/null 2>&1
@@ -521,14 +574,7 @@ CUSTOM_KERNEL_CONFIG
 		local kernel_packing="deb-pkg"
 	fi
 
-	#if [[ $BRANCH == legacy && $LINUXFAMILY =~ sun50iw2|sun50iw6|sun50iw9 ]]; then
-	#	make -C modules/gpu LICHEE_MOD_DIR=${SRC}/.tmp/gpu_modules_${LINUXFAMILY} LICHEE_KDIR=${kerneldir} CROSS_COMPILE=$toolchain/$KERNEL_COMPILER ARCH=$ARCHITECTURE
-	#fi
-
-	if [[ $LINUXFAMILY =~ sun60iw2 ]]; then
-		make -C bsp/modules/gpu LICHEE_TOOLCHAIN_PATH=$toolchain LICHEE_CROSS_COMPILER=$KERNEL_COMPILER LICHEE_PLATFORM=linux LICHEE_MOD_DIR=${SRC}/.tmp/gpu_modules_${LINUXFAMILY} LICHEE_KERN_DIR=${kerneldir} CROSS_COMPILE=$toolchain/$KERNEL_COMPILER ARCH=$ARCHITECTURE
-		make -C bsp/modules/gpu modules_install LICHEE_TOOLCHAIN_PATH=$toolchain LICHEE_CROSS_COMPILER=$KERNEL_COMPILER LICHEE_PLATFORM=linux LICHEE_MOD_DIR=${SRC}/.tmp/gpu_modules_${LINUXFAMILY} LICHEE_KERN_DIR=${kerneldir} CROSS_COMPILE=$toolchain/$KERNEL_COMPILER ARCH=$ARCHITECTURE
-	fi
+	compile_sun60iw2_gpu_module "${kerneldir}"
 
 	display_alert "Creating packages"
 
@@ -929,10 +975,6 @@ find_toolchain()
 # <description>: additional description text
 #
 # priority:
-# $USERPATCHES_PATH/<dest>/<family>/target_<target>
-# $USERPATCHES_PATH/<dest>/<family>/board_<board>
-# $USERPATCHES_PATH/<dest>/<family>/branch_<branch>
-# $USERPATCHES_PATH/<dest>/<family>
 # $EXTER/patch/<dest>/<family>/target_<target>
 # $EXTER/patch/<dest>/<family>/board_<board>
 # $EXTER/patch/<dest>/<family>/branch_<branch>
@@ -948,14 +990,10 @@ advanced_patch()
 	local description=$6
 
 	display_alert "Started patching process for" "$dest $description" "info"
-	display_alert "Looking for user patches in" "userpatches/$dest/$family" "info"
+	display_alert "Looking for patches in" "external/patch/$dest/$family" "info"
 
 	local names=()
 	local dirs=(
-		"$USERPATCHES_PATH/$dest/$family/target_${target}:[\e[33mu\e[0m][\e[34mt\e[0m]"
-		"$USERPATCHES_PATH/$dest/$family/board_${board}:[\e[33mu\e[0m][\e[35mb\e[0m]"
-		"$USERPATCHES_PATH/$dest/$family/branch_${branch}:[\e[33mu\e[0m][\e[33mb\e[0m]"
-		"$USERPATCHES_PATH/$dest/$family:[\e[33mu\e[0m][\e[32mc\e[0m]"
 		"$EXTER/patch/$dest/$family/target_${target}:[\e[32ml\e[0m][\e[34mt\e[0m]"
 		"$EXTER/patch/$dest/$family/board_${board}:[\e[32ml\e[0m][\e[35mb\e[0m]"
 		"$EXTER/patch/$dest/$family/branch_${branch}:[\e[32ml\e[0m][\e[33mb\e[0m]"

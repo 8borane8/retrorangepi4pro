@@ -134,6 +134,29 @@ bootstrap(){
 }
 export -f bootstrap
 
+# Generate only DEST_LANG. Language packs also drop every variant of that language into supported.d.
+configure_image_locale()
+{
+	[[ -n "${DEST_LANG}" ]] || DEST_LANG="en_US.UTF-8"
+	[[ -f "${SDCARD}/etc/locale.gen" ]] || return 0
+
+	display_alert "Configuring locales" "${DEST_LANG}" "info"
+	local escaped="${DEST_LANG//./\\.}"
+	sed -i -E 's/^([^#])/# \1/' "${SDCARD}/etc/locale.gen"
+	if grep -qF "# ${DEST_LANG} UTF-8" "${SDCARD}/etc/locale.gen"; then
+		sed -i "s/^# ${escaped} UTF-8/${DEST_LANG} UTF-8/" "${SDCARD}/etc/locale.gen"
+	else
+		echo "${DEST_LANG} UTF-8" >> "${SDCARD}/etc/locale.gen"
+	fi
+
+	mkdir -p "${SDCARD}/var/lib/locales/supported.d"
+	rm -f "${SDCARD}/var/lib/locales/supported.d/"*
+	echo "${DEST_LANG} UTF-8" > "${SDCARD}/var/lib/locales/supported.d/image"
+
+	chroot "${SDCARD}" /bin/bash -c "locale-gen"
+	chroot "${SDCARD}" /bin/bash -c "update-locale LANG=${DEST_LANG} LANGUAGE=${DEST_LANG} LC_MESSAGES=${DEST_LANG}"
+}
+
 # create_rootfs_cache
 #
 # unpacks cached rootfs for $RELEASE or creates one
@@ -158,6 +181,9 @@ create_rootfs_cache()
 		rm $SDCARD/etc/resolv.conf
 		echo "nameserver $NAMESERVER" >> $SDCARD/etc/resolv.conf
 		create_sources_list "$RELEASE" "$SDCARD/"
+		mount_chroot "$SDCARD"
+		configure_image_locale
+		umount_chroot "$SDCARD"
 	elif [[ $RELEASE == "raspi" ]]; then
 		display_alert "local not found" "Creating new rootfs cache for $RELEASE" "info"
 
@@ -265,18 +291,11 @@ create_rootfs_cache()
 		chmod 755 $SDCARD/sbin/initctl
 		chmod 755 $SDCARD/sbin/start-stop-daemon
 
-		# stage: configure language and locales
-		display_alert "Configuring locales" "$DEST_LANG" "info"
-
-		[[ -f $SDCARD/etc/locale.gen ]] && sed -i "s/^# $DEST_LANG/$DEST_LANG/" $SDCARD/etc/locale.gen
-		eval 'LC_ALL=C LANG=C chroot $SDCARD /bin/bash -c "locale-gen $DEST_LANG"' ${OUTPUT_VERYSILENT:+' >/dev/null 2>/dev/null'}
-		eval 'LC_ALL=C LANG=C chroot $SDCARD /bin/bash -c "update-locale LANG=$DEST_LANG LANGUAGE=$DEST_LANG LC_MESSAGES=$DEST_LANG"' \
-			${OUTPUT_VERYSILENT:+' >/dev/null 2>/dev/null'}
-
 		if [[ -f $SDCARD/etc/default/console-setup ]]; then
 			sed -e 's/CHARMAP=.*/CHARMAP="UTF-8"/' -e 's/FONTSIZE=.*/FONTSIZE="8x16"/' \
 				-e 's/CODESET=.*/CODESET="guess"/' -i $SDCARD/etc/default/console-setup
-			eval 'LC_ALL=C LANG=C chroot $SDCARD /bin/bash -c "setupcon --save --force"'
+			# --save-only writes the cached font and keymap. Applying them needs a real console, which the chroot does not have.
+			eval 'LC_ALL=C LANG=C chroot $SDCARD /bin/bash -c "setupcon --save-only --force"'
 		fi
 
 		# stage: create apt-get sources list
@@ -397,6 +416,9 @@ create_rootfs_cache()
 			display_alert "Recreating Synaptic search index" "Please wait" "info"
 			chroot $SDCARD /bin/bash -c "[[ -f /usr/sbin/update-apt-xapian-index ]] && /usr/sbin/update-apt-xapian-index -u"
 		fi
+
+		# Language packs generate every variant of their language. Keep only the configured locale.
+		configure_image_locale
 
 		# this is needed for the build process later since resolvconf generated file in /run is not saved
 		rm $SDCARD/etc/resolv.conf

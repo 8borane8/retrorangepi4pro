@@ -84,8 +84,6 @@ source "${SRC}"/scripts/general.sh		# general functions
 source "${SRC}"/scripts/chroot-buildpackages.sh	# chroot packages building
 # shellcheck source=pack.sh
 source "${SRC}"/scripts/pack-uboot.sh
-# shellcheck source=build-cix-image.sh
-source "${SRC}"/scripts/build-cix-image.sh
 
 
 # set log path
@@ -148,12 +146,6 @@ if [[ -n $REPOSITORY_UPDATE ]]; then
 				REPO_CONFIG="aptly.conf"
 		fi
 
-		# For user override
-		if [[ -f "${USERPATCHES_PATH}"/lib.config ]]; then
-				display_alert "Using user configuration override" "userpatches/lib.config" "info"
-			source "${USERPATCHES_PATH}"/lib.config
-		fi
-
 		repo-manipulate "$REPOSITORY_UPDATE"
 		exit
 
@@ -163,70 +155,7 @@ fi
 
 
 if [[ -z $BOARD ]]; then
-
-	#options+=("orangepir1"			"Allwinner H2+ quad core 256MB RAM WiFi SPI 2xETH")
-	#options+=("orangepizero"		"Allwinner H2+ quad core 256MB/512MB RAM WiFi SPI")
-	#options+=("orangepipc"			"Allwinner H3 quad core 1GB RAM")
-	#options+=("orangepipcplus"		"Allwinner H3 quad core 1GB RAM WiFi eMMC")
-	#options+=("orangepione"			"Allwinner H3 quad core 512MB RAM")
-	#options+=("orangepilite"		"Allwinner H3 quad core 512MB RAM WiFi")
-	#options+=("orangepiplus"		"Allwinner H3 quad core 1GB/2GB RAM WiFi GBE eMMC")
-	#options+=("orangepiplus2e"		"Allwinner H3 quad core 2GB RAM WiFi GBE eMMC")
-	#options+=("orangepizeroplus2h3" 	"Allwinner H3 quad core 512MB RAM WiFi/BT eMMC")
-	#options+=("orangepipch5"                "Allwinner H5 quad core 1GB RAM")
-	#options+=("orangepipc2"			"Allwinner H5 quad core 1GB RAM GBE SPI")
-	#options+=("orangepioneh5"               "Allwinner H5 quad core 512MB/1GB RAM")
-	#options+=("orangepiprime"		"Allwinner H5 quad core 2GB RAM GBE WiFi/BT")
-	#options+=("orangepizeroplus"		"Allwinner H5 quad core 512MB RAM GBE WiFi SPI")
-	#options+=("orangepizeroplus2h5"		"Allwinner H5 quad core 512MB RAM WiFi/BT eMMC")
-	options+=("orangepi3"			"Allwinner H6 quad core 1GB/2GB RAM GBE WiFi/BT eMMC USB3")
-	options+=("orangepi3-lts"		"Allwinner H6 quad core 2GB RAM GBE WiFi/BT-AW859A eMMC USB3")
-	#options+=("orangepilite2"		"Allwinner H6 quad core 1GB RAM WiFi/BT USB3")
-	#options+=("orangepioneplus"		"Allwinner H6 quad core 1GB RAM GBE")
-	options+=("orangepizero2"		"Allwinner H616 quad core 512MB/1GB RAM WiFi/BT GBE SPI")
-	#options+=("orangepizero2-b"		"Allwinner H616 quad core 512MB/1GB RAM WiFi/BT GBE SPI")
-	#options+=("orangepizero2-lts"           "Allwinner H616 quad core 1.5GB RAM WiFi/BT GBE SPI")
-	options+=("orangepizero3"		"Allwinner H618 quad core 1GB/1.5GB/2GB/4GB RAM WiFi/BT GBE SPI")
-	options+=("orangepizero2w"		"Allwinner H618 quad core 1GB/1.5GB/2GB/4GB RAM WiFi/BT SPI")
-	options+=("orangepizero3w"		"Allwinner A733 octa core 4-16GB RAM USB3 WiFi/BT")
-	options+=("orangepizero4"		"Allwinner A733 octa core 4-16GB RAM GBE USB3 WiFi/BT")
-	#options+=("orangepizero3plus"		"Allwinner H618 quad core 1GB/1.5GB/2GB/4GB RAM WiFi/BT GBE eMMC")
-	#options+=("orangepir1b"			"Allwinner H618 quad core 1.5GB/2GB/4GB RAM WiFi/BT GBE SPI")
-	#options+=("orangepi400"			"Allwinner H616 quad core 4GB RAM WiFi/BT GBE eMMC VGA")
-	options+=("orangepi4"                   "Rockchip  RK3399 hexa core 4GB RAM GBE eMMC USB3 USB-C WiFi/BT")
-	options+=("orangepi4a"		"Allwinner T527 octa core 2-4GB RAM GBE WiFi/BT NVMe eMMC")
-	options+=("orangepi4-lts"                 "Rockchip  RK3399 hexa core 4GB RAM GBE eMMC USB3 USB-C WiFi/BT")
-	#options+=("aipcliteb"		"Allwinner T736 octa core 2-4GB RAM GBE WiFi/BT NVMe")
-	options+=("orangepi4pro"		"Allwinner A733 octa core 4-16GB RAM GBE USB3 WiFi/BT NVMe eMMC")
-	options+=("orangepi800"                 "Rockchip  RK3399 hexa core 4GB RAM GBE eMMC USB3 USB-C WiFi/BT VGA")
-	options+=("orangepi5"                 "Rockchip  RK3588S octa core 4-16GB RAM GBE USB3 USB-C NVMe")
-	options+=("orangepicm5"                 "Rockchip  RK3588S octa core 4-16GB RAM GBE USB3 USB-C")
-	options+=("orangepicm5-tablet"           "Rockchip  RK3588S octa core 4-16GB RAM USB3 USB-C WiFi/BT")
-	options+=("orangepi5b"                 "Rockchip  RK3588S octa core 4-16GB RAM GBE USB3 USB-C WiFi/BT eMMC")
-	#options+=("orangepitab"                 "Rockchip  RK3588S octa core 4-16GB RAM USB-C WiFi/BT NVMe")
-	#options+=("orangepi900"                 "Rockchip  RK3588 octa core 4-16GB RAM 2.5GBE USB3 USB-C WiFi/BT NVMe")
-	options+=("orangepi5pro"                 "Rockchip  RK3588S octa core 4-16GB RAM GBE USB3 WiFi/BT NVMe eMMC")
-	options+=("orangepi5max"                 "Rockchip  RK3588 octa core 4-16GB RAM 2.5GBE USB3 WiFi/BT NVMe eMMC")
-	options+=("orangepi5ultra"                "Rockchip  RK3588 octa core 4-16GB RAM 2.5GBE USB3 WiFi/BT NVMe eMMC")
-	options+=("orangepi5plus"                 "Rockchip  RK3588 octa core 4-32GB RAM 2.5GBE USB3 USB-C WiFi/BT NVMe eMMC")
-	options+=("orangepicm4"                 "Rockchip  RK3566 quad core 2-8GB RAM GBE eMMC USB3 NvMe WiFi/BT")
-	options+=("orangepi3b"                  "Rockchip  RK3566 quad core 2-8GB RAM GBE eMMC USB3 NvMe WiFi/BT")
-	options+=("orangepi6"                   "Cix P1 12-core 8-24GB RAM 2.5GBE USB3 USB-C WiFi/BT NVMe")
-	options+=("orangepi6plus"               "Cix P1 12-core 16-32GB RAM 5GBE USB3 USB-C WiFi/BT NVMe")
-	options+=("orangepirv"                  "Starfive  JH7110 quad core 2-8GB RAM GBE USB3 NvMe WiFi/BT")
-	options+=("orangepirv2"                  "Ky X1 octa core 2-8GB RAM GBE USB3 WiFi/BT NVMe eMMC")
-	options+=("orangepir2s"                  "Ky X1 octa core 2-8GB RAM 2.5GBE USB3 eMMC")
-	#options+=("orangepir1plus"              "Rockchip  RK3328 quad core 1GB RAM 2xGBE USB2 SPI")
-	#options+=("orangepi3plus"              "Amlogic S905D3 quad core 2/4GB RAM SoC eMMC GBE USB3 SPI WiFi/BT")
-
-	menustr="Please choose a Board."
-	BOARD=$(whiptail --title "${titlestr}" --backtitle "${backtitle}" \
-			  --menu "${menustr}" "${TTY_Y}" "${TTY_X}" $((TTY_Y - 8))  \
-			  --cancel-button Exit --ok-button Select "${options[@]}" \
-			  3>&1 1>&2 2>&3)
-
-	unset options
-	[[ -z $BOARD ]] && exit_with_error "No option selected"
+	BOARD="orangepi4pro"
 fi
 
 BOARD_TYPE="conf"
@@ -460,28 +389,6 @@ if [[ ${IGNORE_UPDATES} != yes ]]; then
 
 	fi
 
-	if [[ $BOARDFAMILY == "cix" ]]; then
-
-		if [[ ${GITEE_SERVER} == yes ]]; then
-			fetch_from_repo "https://gitee.com/orangepi-xunlong/component_cix-$BRANCH.git" "${EXTER}/cache/sources/component_cix-$BRANCH" "branch:main"
-
-			if [[ ! -f "${EXTER}/cache/sources/component_cix-$BRANCH/debs/cix-npu-onnxruntime_1.2.0_arm64.deb" ]]; then
-				display_alert "Downloading deb" "cix-npu-onnxruntime" "info"
-				wget -c -t 5 -P "${EXTER}/cache/sources/component_cix-$BRANCH/debs/" \
-				http://www.iplaystore.cn/upload/debs/cix-npu-onnxruntime_1.2.0_arm64.deb
-			fi
-		else
-			fetch_from_repo "https://github.com/orangepi-xunlong/component_cix-$BRANCH.git" "${EXTER}/cache/sources/component_cix-$BRANCH" "branch:main"
-
-			if [[ ! -f "${EXTER}/cache/sources/component_cix-$BRANCH/debs/cix-npu-onnxruntime_1.2.0_arm64.deb" ]]; then
-				display_alert "Downloading deb" "cix-npu-onnxruntime" "info"
-				wget -c -t 5 -P "${EXTER}/cache/sources/component_cix-$BRANCH/debs/" \
-				https://github.com/orangepi-xunlong/component_cix-${BRANCH}/releases/download/v1.2.0/cix-npu-onnxruntime_1.2.0_arm64.deb
-			fi
-		fi
-
-	fi
-
 	[[ $BUILD_OPT =~ kernel|image ]] && fetch_from_repo "$KERNELSOURCE" "$KERNELDIR" "$KERNELBRANCH" "yes"
 
 	if [[ -n ${ATFSOURCE} ]]; then
@@ -490,67 +397,12 @@ if [[ ${IGNORE_UPDATES} != yes ]]; then
 
 	fi
 
-	if [[ ${BOARD} =~ orangepi4|orangepi4-lts|orangepi800 && $BRANCH == legacy ]]; then
-
-		[[ $BUILD_OPT =~ image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk3399_gst_xserver_libs.git" "${EXTER}/cache/sources/rk3399_gst_xserver_libs" "branch:main"
-
-	fi
-
-	if [[ ${BOARD} =~ orangepiaimax ]]; then
-
-		[[ $BUILD_OPT =~ image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/ascend-driver.git" "${EXTER}/cache/sources/ascend-driver" "branch:main"
-
-	fi
-
-	if [[ "${BOARD}x" =~ orangepi4x|orangepi4-ltsx|orangepi800x && $RELEASE =~ focal|buster|bullseye|bookworm ]]; then
-
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/rk-rootfs-build-${RELEASE}" "branch:rk-rootfs-build-${RELEASE}"
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/rk35xx_packages" "branch:rk35xx_packages"
-
-	fi
-
-	if [[ ${BOARDFAMILY} == "rockchip-rk3588" && $RELEASE =~ bullseye|bookworm|focal|jammy|raspi ]]; then
-
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/rk35xx_packages" "branch:rk35xx_packages"
-
-	fi
-
-	if [[ ${BOARDFAMILY} == "rockchip-rk356x" && $RELEASE =~ bullseye|focal|jammy|raspi ]]; then
-
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/rk35xx_packages" "branch:rk35xx_packages"
-
-	fi
-
-	if [[ ${BOARDFAMILY} == "ky" && $RELEASE =~ noble ]]; then
-
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/ky_packages" "branch:ky_packages"
-
-	fi
-
-	if [[ ${BOARDFAMILY} == "sun55iw3" && $RELEASE =~ bookworm|jammy ]]; then
-
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/t527_packages" "branch:t527_packages"
-
-	fi
-
-	if [[ ${BOARDFAMILY} == "sun60iw2" && $RELEASE =~ bullseye ]]; then
+	if [[ ${BUILD_OPT} == image ]]; then
 		if [[ ${GITEE_SERVER} == yes ]]; then
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://gitee.com/orangepi-xunlong/sun60iw2_packages.git" "${EXTER}/cache/sources/sun60iw2_packages" "branch:sun60iw2_packages"
+			fetch_from_repo "https://gitee.com/orangepi-xunlong/sun60iw2_packages.git" "${EXTER}/cache/sources/sun60iw2_packages" "branch:sun60iw2_packages"
 		else
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/sun60iw2_packages" "branch:sun60iw2_packages"
+			fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/sun60iw2_packages" "branch:sun60iw2_packages"
 		fi
-	fi
-
-	if [[ ${BOARD} =~ orangepi3|orangepi3-lts && $RELEASE =~ bullseye && $BRANCH == current ]]; then
-
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/ffmpeg_kodi_${RELEASE}" "branch:ffmpeg_kodi_${RELEASE}"
-
-	fi
-
-	if [[ "${BOARD}x" =~ orangepi4x|orangepi4-ltsx|orangepi800x && $RELEASE =~ jammy && $BRANCH == next ]]; then
-
-		[[ ${BUILD_OPT} == image ]] && fetch_from_repo "https://github.com/orangepi-xunlong/rk-rootfs-build.git" "${EXTER}/cache/sources/ffmpeg_kodi_${RELEASE}" "branch:ffmpeg_kodi_${RELEASE}"
-
 	fi
 
 	call_extension_method "fetch_sources_tools"  <<- 'FETCH_SOURCES_TOOLS'
@@ -591,11 +443,26 @@ fi
 # Compile kernel if packed .deb does not exist or use the one from Orange Pi
 if [[ $BUILD_OPT == kernel || $BUILD_OPT == image ]]; then
 
+	local kernel_ext_stamp="${DEB_STORAGE}/.kernel-extensions-${BRANCH}-${LINUXFAMILY}"
+	mkdir -p "${DEB_STORAGE}"
+	if [[ -f "${kernel_ext_stamp}" && "$(cat "${kernel_ext_stamp}")" != "${EXTENSIONS}" ]]; then
+		display_alert "Kernel extensions changed" "rebuilding the kernel" "info"
+		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL}_${REVISION}_${ARCH}.deb"
+		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL/image/dtb}_${REVISION}_${ARCH}.deb"
+		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL/image/headers}_${REVISION}_${ARCH}.deb"
+	fi
+	printf '%s\n' "${EXTENSIONS}" > "${kernel_ext_stamp}"
+
 	if [[ ! -f ${DEB_STORAGE}/${CHOSEN_KERNEL}_${REVISION}_${ARCH}.deb ]]; then 
 
 		KDEB_CHANGELOG_DIST=$RELEASE
-		[[ "${REPOSITORY_INSTALL}" != *kernel* ]] && compile_kernel
+		if [[ ${REPOSITORY_INSTALL} != *kernel* ]]; then
+			compile_kernel
+			SUN60IW2_GPU_BUILT=yes
+		fi
 	fi
+	# A cached linux-image package skips compile_kernel, and used to skip pvrsrvkm with it.
+	[[ ${SUN60IW2_GPU_BUILT} != yes ]] && compile_sun60iw2_gpu_module "${LINUXSOURCEDIR}"
 
 	if [[ $BUILD_OPT == "kernel" ]]; then
 		unset BUILD_MINIMAL BUILD_DESKTOP COMPRESS_OUTPUTIMAGE

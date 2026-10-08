@@ -9,7 +9,6 @@ figlet
 fping
 ncurses-term
 nocache
-openssh-server
 parted
 psmisc
 python3-apt

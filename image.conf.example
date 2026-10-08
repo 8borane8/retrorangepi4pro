@@ -1,0 +1,25 @@
+# Orange Pi 4 Pro image configuration.
+# Copy this file to image.conf, then edit image.conf.
+# image.conf stays on this machine and is not committed.
+# Run: sudo ./build.sh
+# A command line KEY=value overrides the same setting here.
+
+PROFILE="desktop"          # minimal | server | desktop
+
+RELEASE="resolute"         # bookworm, jammy, bullseye, resolute, trixie
+BRANCH="current"           # current = 6.6, legacy = 5.15
+
+HOSTNAME="orangepi4pro"
+USERNAME="orangepi"
+PASSWORD="orangepi"
+ROOT_PASSWORD="orangepi"
+
+TIMEZONE="UTC"
+LOCALE="en_US.UTF-8"       # only this locale is generated, for example fr_FR.UTF-8
+KEYBOARD="us"              # XKB layout: us, fr, de, ...
+
+# Kernel extensions, in extensions/: gamepads wireguard usbip
+# EXTENSIONS="gamepads wireguard"
+
+# Apps, in apps/: retroarch kodi jellyfin docker
+# APPS="retroarch kodi"

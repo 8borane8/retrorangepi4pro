@@ -17,6 +17,7 @@
 *.patch
 
 b.sh
+image.conf
 .tmp
 kernel
 output

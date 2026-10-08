@@ -28,7 +28,7 @@ Command line values win over `image.conf`.
 
 ## Configure
 
-Edit [`image.conf`](image.conf) in this directory. The builder does not read a `userpatches` directory.
+Copy [`image.conf.example`](image.conf.example) to `image.conf` and edit that file. `image.conf` is local and is not committed. The first `sudo ./build.sh` creates it from the example when it is missing. The builder does not read a `userpatches` directory.
 
 - `PROFILE`: `minimal`, `server`, or `desktop`
 - `RELEASE`: `resolute`, `trixie`, `bookworm`, `jammy`, or `bullseye`

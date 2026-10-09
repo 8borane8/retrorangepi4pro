@@ -58,9 +58,14 @@ fi
 backtitle="Orange Pi building script, http://www.orangepi.org" 
 titlestr="Choose an option"
 
-# Warnings mitigation
-[[ -z $LANGUAGE ]] && export LANGUAGE="en_US:en"            # set to english if not set
-[[ -z $CONSOLE_CHAR ]] && export CONSOLE_CHAR="UTF-8"       # set console to UTF-8 if not set
+# The build host often keeps en_US.UTF-8, en_CA and fr_FR together. A new rootfs
+# only has C.UTF-8 until the image locale is generated, so anything else warns in every chroot.
+unset LC_ADDRESS LC_COLLATE LC_CTYPE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES \
+	LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE LC_TIME
+export LANG="C.UTF-8"
+export LANGUAGE="C"
+export LC_ALL="C.UTF-8"
+[[ -z $CONSOLE_CHAR ]] && export CONSOLE_CHAR="UTF-8"
 
 # Libraries include
 

@@ -51,16 +51,23 @@ function post_kernel_build__xpadneo() {
 	local version
 	version="$(git -C "${src}" describe --tags --always --dirty 2>/dev/null || echo v0.10)"
 
-	# toolchain is local to compile_kernel. The install hook can call us after that function has returned.
+	# compile_kernel's toolchain variable is gone when the kernel package already exists
+	# and this hook runs later. /usr/lib/ccache is first in PATH and hides the cross gcc.
 	local tc="${toolchain:-}"
-	if [[ -z "${tc}" ]]; then
-		tc="$(find_toolchain "${KERNEL_COMPILER}" "${KERNEL_USE_GCC}")"
-		[[ -n "${tc}" ]] || exit_with_error "Could not find required toolchain" "${KERNEL_COMPILER}gcc ${KERNEL_USE_GCC}"
+	if [[ -z "${tc}" || ! -x "${tc}/${KERNEL_COMPILER}gcc" ]]; then
+		tc="$(find_toolchain "${KERNEL_COMPILER}" "${KERNEL_USE_GCC}" | head -1)"
 	fi
+	local gcc="${tc}/${KERNEL_COMPILER}gcc"
+	[[ -x "${gcc}" ]] || exit_with_error "Could not find required toolchain" "${KERNEL_COMPILER}gcc ${KERNEL_USE_GCC}"
 
 	display_alert "Compiling" "hid-xpadneo ${version}" "info"
-	eval env PATH="${tc}:${PATH}" \
-		'make -C "$kerneldir" M="$driver" ARCH="$ARCHITECTURE" CROSS_COMPILE="$CCACHE $KERNEL_COMPILER" VERSION="$version" modules' \
+	env PATH="${tc}:${PATH}" \
+		make -C "${kerneldir}" M="${driver}" \
+		ARCH="${ARCHITECTURE}" \
+		CROSS_COMPILE="${tc}/${KERNEL_COMPILER}" \
+		CC="${CCACHE:+${CCACHE} }${gcc}" \
+		VERSION="${version}" \
+		modules \
 		|| exit_with_error "xpadneo module build failed"
 
 	XPADNEO_KO="${driver}/hid-xpadneo.ko"

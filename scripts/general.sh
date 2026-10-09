@@ -1417,13 +1417,13 @@ prepare_host()
 	# wait until package manager finishes possible system maintanace
 	wait_for_package_manager
 
-	# fix for Locales settings
-	if ! grep -q "^en_US.UTF-8 UTF-8" /etc/locale.gen; then
-		sudo sed -i 's/# en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
-		sudo locale-gen
-	fi
-
-	export LC_ALL="en_US.UTF-8"
+	# A fresh rootfs only has C.UTF-8 until locale-gen. Exporting en_US.UTF-8 makes
+	# chroot bash and perl warn, and a desktop session often also leaves fr_FR or en_CA in LC_*.
+	unset LC_ADDRESS LC_COLLATE LC_CTYPE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES \
+		LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE LC_TIME
+	export LANG="C.UTF-8"
+	export LANGUAGE="C"
+	export LC_ALL="C.UTF-8"
 
 	# packages list for host
 	# NOTE: please sync any changes here with the Dockerfile and Vagrantfile

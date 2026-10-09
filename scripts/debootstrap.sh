@@ -81,6 +81,9 @@ PRE_INSTALL_DISTRIBUTION_SPECIFIC
 
 	fi
 
+	# Packages installed above can call locale-gen. Compile the configured locale last.
+	configure_image_locale
+
 	# clean up / prepare for making the image
 	umount_chroot "$SDCARD"
 	post_debootstrap_tweaks
@@ -134,27 +137,46 @@ bootstrap(){
 }
 export -f bootstrap
 
-# Generate only DEST_LANG. Language packs also drop every variant of that language into supported.d.
+# Language packs call locale-gen from their postinst and would compile every
+# variant of that language. Hold the real generator until configure_image_locale.
+pause_image_locale_gen()
+{
+	[[ -x "${SDCARD}/usr/sbin/locale-gen" ]] || return 0
+	[[ -e "${SDCARD}/usr/sbin/locale-gen.real" ]] && return 0
+	LC_ALL=C LANG=C chroot "${SDCARD}" /bin/bash -c \
+		"dpkg-divert --local --rename --divert /usr/sbin/locale-gen.real --add /usr/sbin/locale-gen" \
+		|| return 0
+	printf '#!/bin/sh\nexit 0\n' > "${SDCARD}/usr/sbin/locale-gen"
+	chmod 755 "${SDCARD}/usr/sbin/locale-gen"
+}
+
+# Compile DEST_LANG only. C.UTF-8 stays, it ships with libc and is not produced here.
 configure_image_locale()
 {
 	[[ -n "${DEST_LANG}" ]] || DEST_LANG="en_US.UTF-8"
 	[[ -f "${SDCARD}/etc/locale.gen" ]] || return 0
 
-	display_alert "Configuring locales" "${DEST_LANG}" "info"
-	local escaped="${DEST_LANG//./\\.}"
-	sed -i -E 's/^([^#])/# \1/' "${SDCARD}/etc/locale.gen"
-	if grep -qF "# ${DEST_LANG} UTF-8" "${SDCARD}/etc/locale.gen"; then
-		sed -i "s/^# ${escaped} UTF-8/${DEST_LANG} UTF-8/" "${SDCARD}/etc/locale.gen"
-	else
-		echo "${DEST_LANG} UTF-8" >> "${SDCARD}/etc/locale.gen"
+	if [[ -e "${SDCARD}/usr/sbin/locale-gen.real" ]]; then
+		rm -f "${SDCARD}/usr/sbin/locale-gen"
+		LC_ALL=C LANG=C chroot "${SDCARD}" /bin/bash -c \
+			"dpkg-divert --local --rename --remove /usr/sbin/locale-gen"
 	fi
 
+	display_alert "Configuring locales" "${DEST_LANG}" "info"
+	sed -i -E 's/^[[:space:]]*([^#])/# \1/' "${SDCARD}/etc/locale.gen"
 	mkdir -p "${SDCARD}/var/lib/locales/supported.d"
 	rm -f "${SDCARD}/var/lib/locales/supported.d/"*
-	echo "${DEST_LANG} UTF-8" > "${SDCARD}/var/lib/locales/supported.d/image"
+	printf '%s UTF-8\n' "${DEST_LANG}" > "${SDCARD}/var/lib/locales/supported.d/image"
+	if [[ -d "${SDCARD}/usr/lib/locale" ]]; then
+		find "${SDCARD}/usr/lib/locale" -mindepth 1 -maxdepth 1 \
+			! -name 'C.utf8' ! -name 'C.UTF-8' -exec rm -rf {} +
+	fi
 
-	chroot "${SDCARD}" /bin/bash -c "locale-gen"
-	chroot "${SDCARD}" /bin/bash -c "update-locale LANG=${DEST_LANG} LANGUAGE=${DEST_LANG} LC_MESSAGES=${DEST_LANG}"
+	LC_ALL=C LANG=C chroot "${SDCARD}" /bin/bash -c "locale-gen" \
+		|| exit_with_error "Failed to generate locale" "${DEST_LANG}"
+
+	local lang="${DEST_LANG%%.*}"
+	printf 'LANG=%s\nLANGUAGE=%s\n' "${DEST_LANG}" "${lang}:${lang%%_*}" > "${SDCARD}/etc/default/locale"
 }
 
 # create_rootfs_cache
@@ -181,9 +203,6 @@ create_rootfs_cache()
 		rm $SDCARD/etc/resolv.conf
 		echo "nameserver $NAMESERVER" >> $SDCARD/etc/resolv.conf
 		create_sources_list "$RELEASE" "$SDCARD/"
-		mount_chroot "$SDCARD"
-		configure_image_locale
-		umount_chroot "$SDCARD"
 	elif [[ $RELEASE == "raspi" ]]; then
 		display_alert "local not found" "Creating new rootfs cache for $RELEASE" "info"
 
@@ -307,7 +326,7 @@ create_rootfs_cache()
 		fi
 
 		# this should fix resolvconf installation failure in some cases
-		chroot $SDCARD /bin/bash -c 'echo "resolvconf resolvconf/linkify-resolvconf boolean false" | debconf-set-selections'
+		LC_ALL=C LANG=C chroot $SDCARD /bin/bash -c 'echo "resolvconf resolvconf/linkify-resolvconf boolean false" | debconf-set-selections'
 
 		# stage: update packages list
 		display_alert "Updating package list" "$RELEASE" "info"
@@ -364,6 +383,7 @@ create_rootfs_cache()
 			fi
 
 			display_alert "Installing the desktop packages for" "Orange Pi" "info"
+			pause_image_locale_gen
 			eval 'LC_ALL=C LANG=C chroot $SDCARD /bin/bash -e -c "DEBIAN_FRONTEND=noninteractive apt-get -y -q \
 				$apt_extra $apt_extra_progress install ${apt_desktop_install_flags} $PACKAGE_LIST_DESKTOP"' \
 				${PROGRESS_LOG_TO_FILE:+' | tee -a $DEST/${LOG_SUBPATH}/debootstrap.log'} \

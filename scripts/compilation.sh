@@ -382,7 +382,18 @@ compile_sun60iw2_gpu_module()
 	local kerneldir="${1:-${LINUXSOURCEDIR}}"
 	[[ -d "${kerneldir}/bsp/modules/gpu" ]] || exit_with_error "GPU sources missing" "${kerneldir}/bsp/modules/gpu"
 
-	local gcc_bin="" toolchain="" gpu_prefix="" gpu_cross="" gpu_out=""
+	local gcc_bin="" toolchain="" gpu_prefix="" gpu_cross="" gpu_out="" symvers="" stamp="" current=""
+	gpu_out="${SRC}/.tmp/gpu_modules_${LINUXFAMILY}"
+	symvers="${kerneldir}/Module.symvers"
+	stamp="${gpu_out}/.stamp"
+	# The build below deletes its output, so an unchanged kernel must not enter it again.
+	if [[ -f "${gpu_out}/pvrsrvkm.ko" && -f "${stamp}" && -f "${symvers}" ]]; then
+		current=$(sha256sum "${symvers}" | awk '{print $1}')
+		if [[ "$(cat "${stamp}")" == "${current}" ]]; then
+			display_alert "Using cached GPU module" "pvrsrvkm" "info"
+			return 0
+		fi
+	fi
 	gcc_bin=$(find "${SRC}/toolchains" -type f -path '*11.2-2022.02*aarch64-none-linux-gnu-gcc' 2>/dev/null | head -1)
 	if [[ -n ${gcc_bin} ]]; then
 		toolchain=$(dirname "${gcc_bin}")
@@ -399,7 +410,6 @@ compile_sun60iw2_gpu_module()
 		gpu_cross="${gpu_prefix}"
 	fi
 
-	gpu_out="${SRC}/.tmp/gpu_modules_${LINUXFAMILY}"
 	mkdir -p "${gpu_out}"
 	rm -rf "${kerneldir}/bsp/modules/gpu/img-bxm/linux/rogue_km/binary_sunxi_linux_"*
 
@@ -426,6 +436,7 @@ compile_sun60iw2_gpu_module()
 		|| exit_with_error "GPU module install failed" "pvrsrvkm"
 
 	[[ -f "${gpu_out}/pvrsrvkm.ko" ]] || exit_with_error "pvrsrvkm.ko missing" "${gpu_out}/pvrsrvkm.ko"
+	[[ -f "${symvers}" ]] && sha256sum "${symvers}" | awk '{print $1}' > "${stamp}"
 }
 
 compile_kernel()

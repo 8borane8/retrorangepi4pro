@@ -1,7 +1,9 @@
 function custom_kernel_config__wireguard() {
-	[[ -f ./scripts/config ]] || return 0
-	./scripts/config --file .config --enable CONFIG_TUN
-	./scripts/config --file .config --module CONFIG_WIREGUARD
+	[[ -f .config && -f ./scripts/config ]] || exit_with_error "Kernel config tool is missing"
+	./scripts/config --file .config --enable CONFIG_TUN \
+		|| exit_with_error "Kernel option failed" "CONFIG_TUN"
+	./scripts/config --file .config --module CONFIG_WIREGUARD \
+		|| exit_with_error "Kernel option failed" "CONFIG_WIREGUARD"
 }
 
 function extension_prepare_config__wireguard() {

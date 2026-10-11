@@ -14,7 +14,7 @@ USERNAME="orangepi"
 PASSWORD="orangepi"
 ROOT_PASSWORD="orangepi"
 
-TIMEZONE="UTC"
+TIMEZONE="UTC"             # for example Europe/Paris
 LOCALE="en_US.UTF-8"       # only this locale is generated, for example fr_FR.UTF-8
 KEYBOARD="us"              # XKB layout: us, fr, de, ...
 

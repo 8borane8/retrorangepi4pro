@@ -1,8 +1,11 @@
 function custom_kernel_config__usbip() {
-	[[ -f ./scripts/config ]] || return 0
-	./scripts/config --file .config --module CONFIG_USBIP_CORE
-	./scripts/config --file .config --module CONFIG_USBIP_VHCI_HCD
-	./scripts/config --file .config --module CONFIG_USBIP_HOST
+	[[ -f .config && -f ./scripts/config ]] || exit_with_error "Kernel config tool is missing"
+	./scripts/config --file .config --module CONFIG_USBIP_CORE \
+		|| exit_with_error "Kernel option failed" "CONFIG_USBIP_CORE"
+	./scripts/config --file .config --module CONFIG_USBIP_VHCI_HCD \
+		|| exit_with_error "Kernel option failed" "CONFIG_USBIP_VHCI_HCD"
+	./scripts/config --file .config --module CONFIG_USBIP_HOST \
+		|| exit_with_error "Kernel option failed" "CONFIG_USBIP_HOST"
 }
 
 function extension_prepare_config__usbip() {
@@ -32,5 +35,6 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 EOF
-	chroot "${SDCARD}" /bin/bash -c "systemctl --no-reload enable usbipd.service >/dev/null 2>&1"
+	chroot "${SDCARD}" /bin/bash -c "systemctl --no-reload enable usbipd.service >/dev/null 2>&1" \
+		|| exit_with_error "USB/IP service failed to enable"
 }

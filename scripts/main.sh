@@ -517,11 +517,23 @@ if [[ $BUILD_OPT == rootfs || $BUILD_OPT == image ]]; then
 	# create board support package
 	[[ -n $RELEASE && ! -f ${DEB_STORAGE}/$RELEASE/${BSP_CLI_PACKAGE_FULLNAME}.deb ]] && create_board_package
 
-	# create desktop package
-	#[[ -n $RELEASE && $DESKTOP_ENVIRONMENT && ! -f ${DEB_STORAGE}/$RELEASE/${CHOSEN_DESKTOP}_${REVISION}_all.deb ]] && create_desktop_package
-	#[[ -n $RELEASE && $DESKTOP_ENVIRONMENT && ! -f ${DEB_STORAGE}/${RELEASE}/${BSP_DESKTOP_PACKAGE_FULLNAME}.deb ]] && create_bsp_desktop_package
-	[[ -n $RELEASE && $DESKTOP_ENVIRONMENT ]] && create_desktop_package
-	[[ -n $RELEASE && $DESKTOP_ENVIRONMENT ]] && create_bsp_desktop_package
+	# Rebuild the desktop metapackages when their package list changes. An old deb would reinstall removed packages.
+	if [[ -n $RELEASE && -n $DESKTOP_ENVIRONMENT ]]; then
+		local desktop_stamp="${DEB_STORAGE}/${RELEASE}/.desktop-packages"
+		local desktop_id
+		desktop_id="$(printf '%s\n%s\n' "${PACKAGE_LIST_DESKTOP}" "${PACKAGE_LIST_PREDEPENDS}" | sha256sum | awk '{print $1}')"
+		if [[ -f "${DEB_STORAGE}/${RELEASE}/${CHOSEN_DESKTOP}_${REVISION}_all.deb" \
+			&& -f "${DEB_STORAGE}/${RELEASE}/${BSP_DESKTOP_PACKAGE_FULLNAME}.deb" \
+			&& -f "${desktop_stamp}" \
+			&& "$(cat "${desktop_stamp}")" == "${desktop_id}" ]]; then
+			display_alert "Using cached desktop packages" "${RELEASE}" "info"
+		else
+			create_desktop_package
+			create_bsp_desktop_package
+			mkdir -p "${DEB_STORAGE}/${RELEASE}"
+			printf '%s\n' "${desktop_id}" > "${desktop_stamp}"
+		fi
+	fi
 	
 	# build additional packages
 	[[ $EXTERNAL_NEW == compile ]] && chroot_build_packages

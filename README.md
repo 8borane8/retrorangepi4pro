@@ -46,11 +46,11 @@ Optional SSH public keys go in `authorized_keys` in this directory, one key per 
 
 - **minimal**: console, smallest package set, kernel headers. No SSH. No zram.
 - **server**: console, OpenSSH, zram, kernel headers
-- **desktop**: XFCE, OpenSSH, zram, and kernel headers. Debian bookworm and trixie also install Chromium. Bullseye installs Firefox ESR.
+- **desktop**: XFCE, OpenSSH, zram, and kernel headers. Debian bookworm and trixie also install Chromium. Bullseye installs Firefox ESR. Ubuntu jammy and resolute install Firefox from Mozilla's package repository.
 
 OpenSSH and zram are part of the server and desktop images. They are not extensions.
 
-Ubuntu publishes Chromium only as a Snap. That package cannot finish installing while the image is built, so jammy and resolute desktops do not include a browser. Google Chrome has no arm64 package.
+Ubuntu publishes Chromium only as a Snap. That package cannot finish installing while the image is built. Google Chrome has no arm64 package.
 
 ## Extensions
 
@@ -65,7 +65,7 @@ Kernel options. Set `EXTENSIONS` in `image.conf`. Each one rebuilds the kernel.
 Set `APPS` in `image.conf`.
 
 - **docker**: `docker.io`, and the user is added to the `docker` group.
-- **retroarch**: fullscreen, Ozone menu, udev gamepads, hotkeys, and folders under the home directory for ROMs, BIOS, saves, and savestates. Libretro cores are installed when the release archive has them. Select is the hotkey, Start quits, and the shoulder buttons save and load state. Escape, F2, and F4 do the same from a keyboard.
+- **retroarch**: the graphical session is RetroArch itself, fullscreen, so boot does not open the XFCE desktop. The menu is the PlayStation one (XMB), in the language of `LOCALE`, with a font that shows accents. Xbox pads use the udev profiles: Select is the hotkey and Start quits. ROMs go in `~/roms`.
 - **kodi**: `~/Videos` and `~/Music` as sources, a LAN playback cache, PulseAudio, and a web remote on port 8080 with no password. Kodi does not replace the XFCE session.
 - **jellyfin**: official arm64 repository, service enabled, `/srv/media/videos` and `/srv/media/music`. Open port 8096 in a browser and attach those folders. That first visit is the one step Jellyfin still asks for.
 

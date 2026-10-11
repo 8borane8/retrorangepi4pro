@@ -18,14 +18,10 @@ fonts-stix
 fonts-symbola
 gdebi
 ghostscript-x
-gnome-font-viewer
 gnome-software
 gstreamer1.0-packagekit
 gstreamer1.0-plugins-base-apps
 gstreamer1.0-pulseaudio
-gtk2-engines
-gtk2-engines-murrine
-gtk2-engines-pixbuf
 gvfs
 inputattach
 keyutils
@@ -59,14 +55,12 @@ pamix
 plank
 pasystray
 pavucontrol
-pavucontrol-qt
 polkitd
 pkexec
 profile-sync-daemon
 pulseaudio-module-bluetooth
 slick-greeter
 smbclient
-terminator
 thunar-volman
 tumbler
 update-inetd
@@ -90,7 +84,6 @@ xfonts-encodings
 xfonts-scalable
 xfonts-utils
 xinit
-xorg-docs-core
 xscreensaver
 xserver-xorg
 xserver-xorg-video-fbdev

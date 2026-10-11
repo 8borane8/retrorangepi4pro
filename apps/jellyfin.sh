@@ -11,10 +11,15 @@ function post_family_tweaks__jellyfin() {
 			;;
 	esac
 
-	chroot "${SDCARD}" /bin/bash -c "DEBIAN_FRONTEND=noninteractive apt-get -y -qq install ca-certificates curl gnupg >/dev/null"
+	chroot "${SDCARD}" /bin/bash -c "DEBIAN_FRONTEND=noninteractive apt-get -y -qq install ca-certificates curl gnupg >/dev/null" \
+		|| exit_with_error "Jellyfin keyring packages failed to install"
 	mkdir -p "${SDCARD}/etc/apt/keyrings"
 	curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
-		| chroot "${SDCARD}" /bin/bash -c "gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg"
+		-o "${SDCARD}/etc/apt/keyrings/jellyfin.asc" \
+		|| exit_with_error "Jellyfin signing key download failed"
+	chroot "${SDCARD}" /bin/bash -c "gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg /etc/apt/keyrings/jellyfin.asc" \
+		|| exit_with_error "Jellyfin signing key is invalid"
+	rm -f "${SDCARD}/etc/apt/keyrings/jellyfin.asc"
 	chmod 644 "${SDCARD}/etc/apt/keyrings/jellyfin.gpg"
 	cat > "${SDCARD}/etc/apt/sources.list.d/jellyfin.sources" << EOF
 Types: deb
@@ -27,7 +32,8 @@ EOF
 
 	chroot "${SDCARD}" /bin/bash -c "DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y -qq install jellyfin" \
 		|| exit_with_error "Jellyfin install failed" "${RELEASE}"
-	chroot "${SDCARD}" /bin/bash -c "systemctl --no-reload enable jellyfin.service >/dev/null 2>&1"
+	chroot "${SDCARD}" /bin/bash -c "systemctl --no-reload enable jellyfin.service >/dev/null 2>&1" \
+		|| exit_with_error "Jellyfin service failed to enable"
 
 	mkdir -p "${SDCARD}/srv/media/videos" "${SDCARD}/srv/media/music"
 	chroot "${SDCARD}" /bin/bash -c "chown -R jellyfin:jellyfin /srv/media && chmod -R 775 /srv/media && usermod -aG jellyfin ${OPI_USERNAME}"

@@ -1,10 +1,10 @@
 kernel_config_set() {
 	local mode="$1"
 	local option="$2"
-	[[ -f .config ]] || return 0
-	if [[ -f ./scripts/config ]]; then
-		./scripts/config --file .config "--${mode}" "${option}"
-	fi
+	[[ -f .config && -f ./scripts/config ]] || exit_with_error "Kernel config tool is missing"
+	# 5.15 does not have every HID option that 6.6 has.
+	./scripts/config --file .config "--${mode}" "${option}" \
+		|| display_alert "Kernel has no option" "${option}" "wrn"
 }
 
 function custom_kernel_config__gamepads() {

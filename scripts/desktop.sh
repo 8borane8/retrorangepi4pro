@@ -278,8 +278,10 @@ desktop_postinstall ()
 	#run_on_sdcard "systemctl --no-reload disable lightdm.service >/dev/null 2>&1"
 	#run_on_sdcard "systemctl --no-reload disable gdm3.service >/dev/null 2>&1"
 
-	# update packages index
-	run_on_sdcard "DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1"
+	# The index is only needed when this step still has packages to install.
+	if [[ -n ${PACKAGE_LIST_DESKTOP_BOARD} || -n ${PACKAGE_LIST_DESKTOP_FAMILY} ]]; then
+		run_on_sdcard "DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1"
+	fi
 
 	# install per board packages
 	if [[ -n ${PACKAGE_LIST_DESKTOP_BOARD} ]]; then

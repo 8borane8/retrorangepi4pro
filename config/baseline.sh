@@ -20,14 +20,14 @@ post_family_tweaks__baseline_ssh() {
 }
 
 post_family_tweaks__baseline_disable_stock_zram() {
-	# The BSP unit turns zram on for every image. Swap belongs to opi4pro-zram-swap.
+	# The image turns this unit back on after extensions run. The script exits
+	# while ENABLED is not true, so it does not create a second swap.
 	mkdir -p "${SDCARD}/etc/default"
 	if [[ -f "${SDCARD}/etc/default/orangepi-zram-config" ]]; then
 		sed -i 's/^ENABLED=.*/ENABLED=false/' "${SDCARD}/etc/default/orangepi-zram-config"
 	else
 		echo "ENABLED=false" > "${SDCARD}/etc/default/orangepi-zram-config"
 	fi
-	chroot "${SDCARD}" /bin/bash -c "systemctl --no-reload disable orangepi-zram-config.service >/dev/null 2>&1" || true
 }
 
 post_family_tweaks__baseline_zram() {

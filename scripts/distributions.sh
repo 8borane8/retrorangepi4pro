@@ -142,9 +142,24 @@ install_common()
 	# this is working properly but not with (at least) Debian Buster
 	chroot "${SDCARD}" /bin/bash -c "chmod u+s /bin/ping"
 
-	# change time zone data
-	echo "${TZDATA}" > "${SDCARD}"/etc/timezone
-	chroot "${SDCARD}" /bin/bash -c "dpkg-reconfigure -f noninteractive tzdata >/dev/null 2>&1"
+	# TIMEZONE from image.conf. Debconf otherwise keeps the zone chosen while the rootfs was built.
+	[[ -n "${TZDATA}" ]] || TZDATA="UTC"
+	if [[ ! -e "${SDCARD}/usr/share/zoneinfo/${TZDATA}" ]]; then
+		exit_with_error "Timezone does not exist" "${TZDATA}"
+	fi
+	local tz_area="Etc" tz_zone="${TZDATA}"
+	if [[ "${TZDATA}" == */* ]]; then
+		tz_area="${TZDATA%%/*}"
+		tz_zone="${TZDATA#*/}"
+	fi
+	cat > "${SDCARD}/etc/timezone" <<< "${TZDATA}"
+	ln -sfn "/usr/share/zoneinfo/${TZDATA}" "${SDCARD}/etc/localtime"
+	chroot "${SDCARD}" /bin/bash -c "echo 'tzdata tzdata/Areas select ${tz_area}' | debconf-set-selections"
+	chroot "${SDCARD}" /bin/bash -c "echo 'tzdata tzdata/Zones/${tz_area} select ${tz_zone}' | debconf-set-selections"
+	chroot "${SDCARD}" /bin/bash -c "DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -f noninteractive tzdata" \
+		|| exit_with_error "Timezone configuration failed" "${TZDATA}"
+	ln -sfn "/usr/share/zoneinfo/${TZDATA}" "${SDCARD}/etc/localtime"
+	printf '%s\n' "${TZDATA}" > "${SDCARD}/etc/timezone"
 
 	# keyboard layout from config/image.conf (XKB layout code, for example us or fr)
 	if [[ -n "${KEYBOARD}" ]]; then

@@ -86,6 +86,11 @@ read_image_kernel_options() {
 			CONFIG_WIREGUARD=m
 			CONFIG_NFS_FS=m
 			CONFIG_CIFS=m
+			# BBR needs the advanced congestion menu, which the vendor config leaves off.
+			# The fq queue discipline is what BBR paces with.
+			CONFIG_TCP_CONG_ADVANCED=y
+			CONFIG_TCP_CONG_BBR=y
+			CONFIG_NET_SCH_FQ=y
 		)
 	fi
 	local spec

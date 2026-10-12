@@ -39,7 +39,7 @@ Copy [`image.conf.example`](image.conf.example) to `image.conf` and edit that fi
 - `KEYBOARD`, an XKB layout such as `us` or `fr`
 - `KERNEL_CONFIG`: extra kernel options, `CONFIG_NAME=y`, `=m`, or `=n`. A new set of options builds a new kernel; each set is cached in `output/debs/kernel/`
 
-Optional SSH public keys go in `authorized_keys` in this directory, one key per line. Server and desktop images install them for `USERNAME`.
+Optional SSH public keys go in `authorized_keys` in this directory, one key per line. Server and desktop images install them for `USERNAME`. Password login stays on either way.
 
 ## Profiles
 
@@ -47,7 +47,22 @@ Optional SSH public keys go in `authorized_keys` in this directory, one key per 
 - **server**: console, OpenSSH, zram, kernel headers
 - **desktop**: XFCE, OpenSSH, zram, kernel headers, and Google Chrome
 
-OpenSSH and zram are part of the server and desktop images. Those two images also enable gamepads (Xbox, Sony, Nintendo, Steam), WireGuard, NFS, and CIFS in the kernel. USB storage, exFAT, and NTFS are already in the vendor kernel, including on minimal.
+OpenSSH and zram are part of the server and desktop images. Those two images also enable gamepads (Xbox, Sony, Nintendo, Steam), WireGuard, NFS, CIFS, and TCP BBR with the `fq` queue in the kernel. USB storage, exFAT, and NTFS are already in the vendor kernel, including on minimal.
+
+Server and desktop images also carry `nvme-cli` and `smartmontools` for NVMe health, and `earlyoom`, which ends the biggest process before a full memory freezes the board. zram swap reads one page at a time (`vm.page-cluster=0`). BBR is set through `/etc/sysctl.d/90-opi4pro.conf`; a failed line there is ignored, so it can never block boot.
+
+## Pins: GPIO, I2C, SPI
+
+Every image has the `gpio`, `i2c` and `spi` groups and udev rules that give them `/dev/gpiochip*`, `/dev/i2c-*` and `/dev/spidev*`. `USERNAME` is in all three, so no `sudo` is needed. Server and desktop images add:
+
+- `gpiod` (`gpioinfo`, `gpioget`, `gpioset`, `gpiomon`), `libgpiod-dev` and `python3-libgpiod`
+- `i2c-tools` (`i2cdetect`, `i2cget`, `i2cset`), `python3-smbus`
+- `spi-tools` and `python3-spidev`
+- Orange Pi's wiringOP: `gpio readall` prints the 40-pin header, and `-lwiringPi` is ready for C programs. It writes registers through `/dev/mem`, so it needs `sudo`. `gcc` and `make` stay in the image for that.
+
+I2C, SPI and UART pins are off in the device tree until you turn them on. Run `sudo orangepi-config`, open **System**, then **Hardware**, tick the interfaces, and reboot. After that `i2cdetect -l` and `ls /dev/spidev*` show them.
+
+wiringOP is pinned to one commit and built while the image is made. If it fails to build, the image is still produced without it and the build prints a warning; `gpiod` and the Python modules keep working. A package missing on one release is skipped the same way.
 
 ## GPU
 

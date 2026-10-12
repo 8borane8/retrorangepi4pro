@@ -448,15 +448,16 @@ fi
 # Compile kernel if packed .deb does not exist or use the one from Orange Pi
 if [[ $BUILD_OPT == kernel || $BUILD_OPT == image ]]; then
 
-	local kernel_ext_stamp="${DEB_STORAGE}/.kernel-extensions-${BRANCH}-${LINUXFAMILY}"
+	kernel_ext_stamp="${DEB_STORAGE}/.kernel-extensions-${BRANCH}-${LINUXFAMILY}"
+	kernel_cfg="${IMAGE_KERNEL_OPTIONS[*]}"
 	mkdir -p "${DEB_STORAGE}"
-	if [[ -f "${kernel_ext_stamp}" && "$(cat "${kernel_ext_stamp}")" != "${EXTENSIONS}" ]]; then
-		display_alert "Kernel extensions changed" "rebuilding the kernel" "info"
+	if [[ -f "${kernel_ext_stamp}" && "$(cat "${kernel_ext_stamp}")" != "${kernel_cfg}" ]]; then
+		display_alert "Kernel config changed" "rebuilding the kernel" "info"
 		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL}_${REVISION}_${ARCH}.deb"
 		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL/image/dtb}_${REVISION}_${ARCH}.deb"
 		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL/image/headers}_${REVISION}_${ARCH}.deb"
 	fi
-	printf '%s\n' "${EXTENSIONS}" > "${kernel_ext_stamp}"
+	printf '%s\n' "${kernel_cfg}" > "${kernel_ext_stamp}"
 
 	if [[ ! -f ${DEB_STORAGE}/${CHOSEN_KERNEL}_${REVISION}_${ARCH}.deb ]]; then 
 
@@ -466,7 +467,7 @@ if [[ $BUILD_OPT == kernel || $BUILD_OPT == image ]]; then
 			SUN60IW2_GPU_BUILT=yes
 		fi
 	fi
-	# A cached linux-image package skips compile_kernel, and used to skip pvrsrvkm with it.
+	# A cached linux-image package skips compile_kernel, and pvrsrvkm with it.
 	[[ ${SUN60IW2_GPU_BUILT} != yes ]] && compile_sun60iw2_gpu_module "${LINUXSOURCEDIR}"
 
 	if [[ $BUILD_OPT == "kernel" ]]; then

@@ -18,8 +18,5 @@ TIMEZONE="UTC"             # for example Europe/Paris
 LOCALE="en_US.UTF-8"       # only this locale is generated, for example fr_FR.UTF-8
 KEYBOARD="us"              # XKB layout: us, fr, de, ...
 
-# Kernel extensions, in extensions/: gamepads wireguard usbip
-# EXTENSIONS="gamepads wireguard"
-
-# Apps, in apps/: retroarch kodi jellyfin docker
-# APPS="retroarch kodi"
+# Extra kernel options: CONFIG_NAME=y, =m, or =n. These replace the same built-in option.
+# KERNEL_CONFIG="CONFIG_WIREGUARD=y"

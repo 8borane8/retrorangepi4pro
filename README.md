@@ -1,6 +1,6 @@
 # Orange Pi 4 Pro image builder
 
-Builds a bootable Linux image for the Orange Pi 4 Pro (Allwinner A733). The image includes the AIC8800 Wi-Fi and Bluetooth modules and the PowerVR GPU driver. The board has Gigabit Ethernet, USB 3, NVMe, and eMMC.
+Builds a bootable Linux image for the Orange Pi 4 Pro (Allwinner A733). The image includes the AIC8800 Wi-Fi and Bluetooth modules. The board has Gigabit Ethernet, USB 3, NVMe, and eMMC.
 
 The default kernel branch `current` is Linux 6.6. `legacy` is Linux 5.15. Every image ships the matching kernel headers.
 
@@ -37,37 +37,25 @@ Copy [`image.conf.example`](image.conf.example) to `image.conf` and edit that fi
 - `TIMEZONE`, for example `UTC` or `Europe/Paris`
 - `LOCALE`, for example `en_US.UTF-8` or `fr_FR.UTF-8`. Only this locale is generated. An Ubuntu desktop also installs that language's translation pack. English does not, because the programs are already in English.
 - `KEYBOARD`, an XKB layout such as `us` or `fr`
-- `EXTENSIONS`: kernel features from `extensions/`
-- `APPS`: preconfigured software from `apps/`
+- `KERNEL_CONFIG`: extra kernel options, `CONFIG_NAME=y`, `=m`, or `=n`. Changing this rebuilds the kernel
 
 Optional SSH public keys go in `authorized_keys` in this directory, one key per line. Server and desktop images install them for `USERNAME`.
 
 ## Profiles
 
-- **minimal**: console, smallest package set, kernel headers. No SSH. No zram.
+- **minimal**: console, smallest package set, kernel headers. No SSH. No zram. The vendor kernel, unchanged.
 - **server**: console, OpenSSH, zram, kernel headers
-- **desktop**: XFCE, OpenSSH, zram, and kernel headers. Debian bookworm and trixie also install Chromium. Bullseye installs Firefox ESR. Ubuntu jammy and resolute install Firefox from Mozilla's package repository.
+- **desktop**: XFCE, OpenSSH, zram, kernel headers, and Google Chrome
 
-OpenSSH and zram are part of the server and desktop images. They are not extensions.
+OpenSSH and zram are part of the server and desktop images. Those two images also enable gamepads (Xbox, Sony, Nintendo, Steam), WireGuard, NFS, and CIFS in the kernel. USB storage, exFAT, and NTFS are already in the vendor kernel, including on minimal.
 
-Ubuntu publishes Chromium only as a Snap. That package cannot finish installing while the image is built. Google Chrome has no arm64 package.
+## GPU
 
-## Extensions
+The PowerVR BXM-4-64 driver (kernel module, firmware, OpenCL, Vulkan, EGL, and GLES) is on every console image, for compute. Desktop images get it on resolute, trixie, and bullseye, the releases Orange Pi ships it on. Bookworm and jammy desktops use Mesa software rendering.
 
-Kernel options. Set `EXTENSIONS` in `image.conf`. Each one rebuilds the kernel.
+Orange Pi publishes the driver as one Debian 11 package that also replaces Xorg and its modesetting driver. On a desktop, `xserver-xorg-core` is held so an upgrade does not put the stock Xorg back. GTK4 draws with Cairo because its GL renderer crashes this driver. Chrome is started with ANGLE on Vulkan, as on the Orange Pi image. A Chrome update rewrites its launcher and drops those flags.
 
-- **gamepads**: joystick, xpad, UHID, HIDRAW, and the Sony, Nintendo, and Steam HID drivers. Builds the xpadneo Bluetooth Xbox module.
-- **wireguard**: TUN and WireGuard, `wireguard-tools`, and `/etc/wireguard/wg0.conf`. The interface stays disabled until you replace `REPLACE_ME` with a real private key.
-- **usbip**: USB/IP host and VHCI, with `usbipd` enabled so a USB device can be shared on the LAN.
-
-## Apps
-
-Set `APPS` in `image.conf`.
-
-- **docker**: `docker.io`, and the user is added to the `docker` group.
-- **retroarch**: the graphical session is RetroArch itself, fullscreen, so boot does not open the XFCE desktop. The menu is the PlayStation one (XMB), in the language of `LOCALE`, with a font that shows accents. Xbox pads use the udev profiles: Select is the hotkey and Start quits. ROMs go in `~/roms`.
-- **kodi**: `~/Videos` and `~/Music` as sources, a LAN playback cache, PulseAudio, and a web remote on port 8080 with no password. Kodi does not replace the XFCE session.
-- **jellyfin**: official arm64 repository, service enabled, `/srv/media/videos` and `/srv/media/music`. Open port 8096 in a browser and attach those folders. That first visit is the one step Jellyfin still asks for.
+Check on the board with `vulkaninfo --summary` or `clinfo`. Both should name the PowerVR GPU.
 
 ## Flash
 

@@ -55,32 +55,64 @@ apply_image_config() {
 	[[ -n "${ROOT_PASSWORD}" ]] && ROOTPWD="${ROOT_PASSWORD}"
 	[[ -n "${HOSTNAME}" ]] && HOST="${HOSTNAME}"
 
-	if [[ "${BUILD_DESKTOP}" == "yes" ]]; then
-		# Empty, but set, so the old app-group menu does not appear.
-		DESKTOP_APPGROUPS_SELECTED=""
-		case "${RELEASE}" in
-			bookworm|trixie)
-				PROFILE_PACKAGES="${PROFILE_PACKAGES} chromium"
-				;;
-			bullseye)
-				PROFILE_PACKAGES="${PROFILE_PACKAGES} firefox-esr"
-				;;
-		esac
-	fi
+	# Empty, but set, so the old app-group menu does not appear.
+	[[ "${BUILD_DESKTOP}" == "yes" ]] && DESKTOP_APPGROUPS_SELECTED=""
 
-	local name
-	for name in ${EXTENSIONS}; do
-		enable_extension "${name}"
-	done
-	for name in ${APPS}; do
-		enable_app "${name}"
-	done
+	read_image_kernel_options
 
 	display_alert "Image profile" "${PROFILE}" "info"
 }
 
+# Server and desktop only, same split as SSH and zram. Minimal keeps the vendor kernel.
+# KERNEL_CONFIG is applied after, so it wins on a duplicate.
+read_image_kernel_options() {
+	IMAGE_KERNEL_OPTIONS=()
+	if [[ ${BUILD_MINIMAL} != yes ]]; then
+		IMAGE_KERNEL_OPTIONS+=(
+			CONFIG_INPUT_JOYSTICK=y
+			CONFIG_JOYSTICK_XPAD=m
+			CONFIG_INPUT_UINPUT=y
+			CONFIG_UHID=m
+			CONFIG_HIDRAW=y
+			CONFIG_HID_BATTERY_STRENGTH=y
+			CONFIG_HID_SONY=y
+			CONFIG_HID_NINTENDO=y
+			CONFIG_HID_STEAM=y
+			CONFIG_TUN=y
+			CONFIG_WIREGUARD=m
+			CONFIG_NFS_FS=m
+			CONFIG_CIFS=m
+		)
+	fi
+	local spec
+	for spec in ${KERNEL_CONFIG}; do
+		[[ "${spec}" =~ ^CONFIG_[A-Z0-9_]+=(y|m|n)$ ]] || {
+			display_alert "Bad kernel option" "${spec}" "err"
+			exit 1
+		}
+		IMAGE_KERNEL_OPTIONS+=("${spec}")
+	done
+}
+
+apply_image_kernel_config() {
+	local spec option value mode
+	[[ -f .config && -f ./scripts/config ]] || exit_with_error "Kernel config tool is missing"
+	read_image_kernel_options
+	for spec in "${IMAGE_KERNEL_OPTIONS[@]}"; do
+		option="${spec%%=*}"
+		value="${spec#*=}"
+		case "${value}" in
+			y) mode="enable" ;;
+			m) mode="module" ;;
+			n) mode="disable" ;;
+		esac
+		./scripts/config --file .config "--${mode}" "${option}" \
+			|| display_alert "Kernel has no option" "${option}" "wrn"
+	done
+}
+
 # configuration.sh rebuilds PACKAGE_LIST_ADDITIONAL from package files
-# after this script runs. Put profile and extra packages back at user_config.
+# after this script runs. Put extra packages back at user_config.
 user_config__image_packages() {
 	if [[ "${BUILD_DESKTOP}" == "yes" && -n "${DEST_LANG}" ]]; then
 		local lang="${DEST_LANG%%.*}"
@@ -119,9 +151,6 @@ user_config__image_packages() {
 				[[ -n "${dict}" ]] && PACKAGE_LIST_DESKTOP="${PACKAGE_LIST_DESKTOP} ${dict}"
 				;;
 		esac
-	fi
-	if [[ -n "${PROFILE_PACKAGES}" ]]; then
-		PACKAGE_LIST_ADDITIONAL="${PACKAGE_LIST_ADDITIONAL} ${PROFILE_PACKAGES}"
 	fi
 	if [[ -n "${EXTRA_PACKAGES}" ]]; then
 		PACKAGE_LIST_ADDITIONAL="${PACKAGE_LIST_ADDITIONAL} ${EXTRA_PACKAGES}"

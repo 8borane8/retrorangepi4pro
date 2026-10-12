@@ -1,5 +1,4 @@
 # OpenSSH and zram are part of the server and desktop images.
-# They are not extensions and not apps.
 
 extension_prepare_config__baseline_ssh() {
 	[[ "${ENABLE_SSH}" == "yes" ]] || return 0

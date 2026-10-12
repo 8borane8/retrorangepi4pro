@@ -382,61 +382,46 @@ compile_sun60iw2_gpu_module()
 	local kerneldir="${1:-${LINUXSOURCEDIR}}"
 	[[ -d "${kerneldir}/bsp/modules/gpu" ]] || exit_with_error "GPU sources missing" "${kerneldir}/bsp/modules/gpu"
 
-	local gcc_bin="" toolchain="" gpu_prefix="" gpu_cross="" gpu_out="" symvers="" stamp="" current=""
-	gpu_out="${SRC}/.tmp/gpu_modules_${LINUXFAMILY}"
-	symvers="${kerneldir}/Module.symvers"
-	stamp="${gpu_out}/.stamp"
-	# The build below deletes its output, so an unchanged kernel must not enter it again.
-	if [[ -f "${gpu_out}/pvrsrvkm.ko" && -f "${stamp}" && -f "${symvers}" ]]; then
-		current=$(sha256sum "${symvers}" | awk '{print $1}')
-		if [[ "$(cat "${stamp}")" == "${current}" ]]; then
-			display_alert "Using cached GPU module" "pvrsrvkm" "info"
-			return 0
-		fi
-	fi
-	gcc_bin=$(find "${SRC}/toolchains" -type f -path '*11.2-2022.02*aarch64-none-linux-gnu-gcc' 2>/dev/null | head -1)
-	if [[ -n ${gcc_bin} ]]; then
-		toolchain=$(dirname "${gcc_bin}")
-		gpu_prefix="aarch64-none-linux-gnu-"
-		gpu_cross="${toolchain}/${gpu_prefix}"
-	elif ! dpkg-architecture -e "${ARCH}" >/dev/null 2>&1; then
-		toolchain=$(find_toolchain "${KERNEL_COMPILER}" "${KERNEL_USE_GCC}" | head -1)
-		gpu_prefix="${KERNEL_COMPILER}"
-		gpu_cross="${toolchain}/${gpu_prefix}"
+	# Same compiler as the kernel. A different gcc builds a module that does not load.
+	local gpu_tc="/usr/bin" gpu_cross="${KERNEL_COMPILER}"
+	local gpu_out="${SRC}/.tmp/gpu_modules_${LINUXFAMILY}"
+	local symvers="${kerneldir}/Module.symvers"
+	local stamp="${gpu_out}/.stamp"
+	if ! dpkg-architecture -e "${ARCH}" >/dev/null 2>&1; then
+		gpu_tc=$(find_toolchain "${KERNEL_COMPILER}" "${KERNEL_USE_GCC}")
+		gpu_cross="${gpu_tc}/${KERNEL_COMPILER}"
 		[[ -x "${gpu_cross}gcc" ]] || exit_with_error "Could not find required toolchain" "${KERNEL_COMPILER}gcc ${KERNEL_USE_GCC}"
-	else
-		toolchain="/usr/bin"
-		gpu_prefix="${KERNEL_COMPILER}"
-		gpu_cross="${gpu_prefix}"
+	fi
+	[[ -f "${symvers}" ]] || exit_with_error "Kernel is not built" "${symvers}"
+	local build_id
+	build_id="$(sha256sum "${symvers}" | awk '{print $1}') $("${gpu_cross}gcc" -dumpmachine)-$("${gpu_cross}gcc" -dumpversion)"
+
+	# The build below deletes its output, so an unchanged kernel must not enter it again.
+	if [[ -f "${gpu_out}/pvrsrvkm.ko" && "$(cat "${stamp}" 2>/dev/null)" == "${build_id}" ]]; then
+		display_alert "Using cached GPU module" "pvrsrvkm" "info"
+		return 0
 	fi
 
 	mkdir -p "${gpu_out}"
 	rm -rf "${kerneldir}/bsp/modules/gpu/img-bxm/linux/rogue_km/binary_sunxi_linux_"*
 
-	display_alert "Compiling GPU module" "pvrsrvkm $("${gpu_cross}gcc" -dumpversion)" "info"
+	display_alert "Compiling GPU module" "pvrsrvkm ${build_id#* }" "info"
 
-	make -C "${kerneldir}/bsp/modules/gpu" \
-		LICHEE_TOOLCHAIN_PATH="${toolchain}" \
-		LICHEE_CROSS_COMPILER="${gpu_prefix}" \
-		LICHEE_PLATFORM=linux \
-		LICHEE_MOD_DIR="${gpu_out}" \
-		LICHEE_KERN_DIR="${kerneldir}" \
-		CROSS_COMPILE="${gpu_cross}" \
-		ARCH="${ARCHITECTURE}" \
-		|| exit_with_error "GPU module was not built" "pvrsrvkm"
-
-	make -C "${kerneldir}/bsp/modules/gpu" modules_install \
-		LICHEE_TOOLCHAIN_PATH="${toolchain}" \
-		LICHEE_CROSS_COMPILER="${gpu_prefix}" \
-		LICHEE_PLATFORM=linux \
-		LICHEE_MOD_DIR="${gpu_out}" \
-		LICHEE_KERN_DIR="${kerneldir}" \
-		CROSS_COMPILE="${gpu_cross}" \
-		ARCH="${ARCHITECTURE}" \
-		|| exit_with_error "GPU module install failed" "pvrsrvkm"
+	local make_args=(
+		-C "${kerneldir}/bsp/modules/gpu"
+		LICHEE_TOOLCHAIN_PATH="${gpu_tc}"
+		LICHEE_CROSS_COMPILER="${KERNEL_COMPILER}"
+		LICHEE_PLATFORM=linux
+		LICHEE_MOD_DIR="${gpu_out}"
+		LICHEE_KERN_DIR="${kerneldir}"
+		CROSS_COMPILE="${gpu_cross}"
+		ARCH="${ARCHITECTURE}"
+	)
+	make "${make_args[@]}" || exit_with_error "GPU module was not built" "pvrsrvkm"
+	make "${make_args[@]}" modules_install || exit_with_error "GPU module install failed" "pvrsrvkm"
 
 	[[ -f "${gpu_out}/pvrsrvkm.ko" ]] || exit_with_error "pvrsrvkm.ko missing" "${gpu_out}/pvrsrvkm.ko"
-	[[ -f "${symvers}" ]] && sha256sum "${symvers}" | awk '{print $1}' > "${stamp}"
+	printf '%s\n' "${build_id}" > "${stamp}"
 }
 
 compile_kernel()
@@ -516,6 +501,7 @@ Before any olddefconfig any Kconfig make is called.
 A good place to customize the .config directly.
 CUSTOM_KERNEL_CONFIG
 
+	apply_image_kernel_config
 
 	# hack for deb builder. To pack what's missing in headers pack.
 	cp "$EXTER"/patch/misc/headers-debian-byteshift.patch /tmp

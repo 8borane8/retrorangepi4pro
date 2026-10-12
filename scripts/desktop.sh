@@ -293,15 +293,6 @@ desktop_postinstall ()
 		run_on_sdcard "DEBIAN_FRONTEND=noninteractive apt-get -yqq --no-install-recommends install $PACKAGE_LIST_DESKTOP_FAMILY"
 	fi
 
-	# Compile Turbo Frame buffer for sunxi
-	if [[ $LINUXFAMILY == sun8i && $BRANCH == legacy ]]; then
-		sed 's/name="use_compositing" type="bool" value="true"/name="use_compositing" type="bool" value="false"/' -i "${SDCARD}"/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml
-
-		# enable memory reservations
-		echo "disp_mem_reserves=on" >> "${SDCARD}"/boot/orangepiEnv.txt
-		echo "extraargs=cma=96M" >> "${SDCARD}"/boot/orangepiEnv.txt
-	fi
-
 	if [[ -d ${SDCARD}/etc/lightdm ]]; then
 		mkdir -p ${SDCARD}/etc/lightdm/lightdm.conf.d
 		cat <<-EOF > ${SDCARD}/etc/lightdm/lightdm.conf.d/22-orangepi-autologin.conf

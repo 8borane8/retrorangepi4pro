@@ -9,13 +9,11 @@
 
 # Functions:
 
-# compile_atf
 # compile_uboot
 # compile_kernel
 # compile_firmware
 # compile_orangepi-config
 # compile_sunxi_tools
-# install_rkbin_tools
 # grab_version
 # find_toolchain
 # advanced_patch
@@ -26,100 +24,8 @@
 
 
 
-compile_atf()
-{
-	if [[ $CLEAN_LEVEL == *make* ]]; then
-		display_alert "Cleaning" "$ATFSOURCEDIR" "info"
-		(cd "${EXTER}/cache/sources/${ATFSOURCEDIR}"; make distclean > /dev/null 2>&1)
-	fi
-
-	if [[ $USE_OVERLAYFS == yes ]]; then
-		local atfdir
-		atfdir=$(overlayfs_wrapper "wrap" "$EXTER/cache/sources/$ATFSOURCEDIR" "atf_${LINUXFAMILY}_${BRANCH}")
-	else
-		local atfdir="$EXTER/cache/sources/$ATFSOURCEDIR"
-	fi
-	cd "$atfdir" || exit
-
-	display_alert "Compiling ATF" "" "info"
-
-	# build aarch64
-	if [[ $(dpkg --print-architecture) == amd64 ]]; then
-
-		local toolchain
-		toolchain=$(find_toolchain "$ATF_COMPILER" "$ATF_USE_GCC")
-		[[ -z $toolchain ]] && exit_with_error "Could not find required toolchain" "${ATF_COMPILER}gcc $ATF_USE_GCC"
-
-		if [[ -n $ATF_TOOLCHAIN2 ]]; then
-			local toolchain2_type toolchain2_ver toolchain2
-			toolchain2_type=$(cut -d':' -f1 <<< "${ATF_TOOLCHAIN2}")
-			toolchain2_ver=$(cut -d':' -f2 <<< "${ATF_TOOLCHAIN2}")
-			toolchain2=$(find_toolchain "$toolchain2_type" "$toolchain2_ver")
-			[[ -z $toolchain2 ]] && exit_with_error "Could not find required toolchain" "${toolchain2_type}gcc $toolchain2_ver"
-		fi
-
-		# build aarch64
-	fi
-
-	display_alert "Compiler version" "${ATF_COMPILER}gcc $(eval env PATH="${toolchain}:${PATH}" "${ATF_COMPILER}gcc" -dumpversion)" "info"
-
-	local target_make target_patchdir target_files
-	target_make=$(cut -d';' -f1 <<< "${ATF_TARGET_MAP}")
-	target_patchdir=$(cut -d';' -f2 <<< "${ATF_TARGET_MAP}")
-	target_files=$(cut -d';' -f3 <<< "${ATF_TARGET_MAP}")
-
-	advanced_patch "atf" "${ATFPATCHDIR}" "$BOARD" "$target_patchdir" "$BRANCH" "${LINUXFAMILY}-${BOARD}-${BRANCH}"
-
-	# create patch for manual source changes
-	[[ $CREATE_PATCHES == yes ]] && userpatch_create "atf"
-
-	echo -e "\n\t==  atf  ==\n" >> "${DEST}"/${LOG_SUBPATH}/compilation.log
-	# ENABLE_BACKTRACE="0" has been added to workaround a regression in ATF.
-	# Check: https://github.com/armbian/build/issues/1157
-	eval CCACHE_BASEDIR="$(pwd)" env PATH="${toolchain}:${toolchain2}:${PATH}" \
-		'make ENABLE_BACKTRACE="0" $target_make $CTHREADS \
-		CROSS_COMPILE="$CCACHE $ATF_COMPILER"' 2>> "${DEST}"/${LOG_SUBPATH}/compilation.log \
-		${PROGRESS_LOG_TO_FILE:+' | tee -a $DEST/${LOG_SUBPATH}/compilation.log'} \
-		${OUTPUT_DIALOG:+' | dialog --backtitle "$backtitle" --progressbox "Compiling ATF..." $TTY_Y $TTY_X'} \
-		${OUTPUT_VERYSILENT:+' >/dev/null 2>/dev/null'}
-
-	[[ ${PIPESTATUS[0]} -ne 0 ]] && exit_with_error "ATF compilation failed"
-
-	[[ $(type -t atf_custom_postprocess) == function ]] && atf_custom_postprocess
-
-	atftempdir=$(mktemp -d)
-	chmod 700 ${atftempdir}
-	trap "rm -rf \"${atftempdir}\" ; exit 0" 0 1 2 3 15
-
-	# copy files to temp directory
-	for f in $target_files; do
-		local f_src
-		f_src=$(cut -d':' -f1 <<< "${f}")
-		if [[ $f == *:* ]]; then
-			local f_dst
-			f_dst=$(cut -d':' -f2 <<< "${f}")
-		else
-			local f_dst
-			f_dst=$(basename "${f_src}")
-		fi
-		[[ ! -f $f_src ]] && exit_with_error "ATF file not found" "$(basename "${f_src}")"
-		cp "${f_src}" "${atftempdir}/${f_dst}"
-	done
-
-	# copy license file to pack it to u-boot package later
-	[[ -f license.md ]] && cp license.md "${atftempdir}"/
-}
-
 compile_uboot()
 {
-
-	if [[ ${BOARDFAMILY} == "sun50iw9" && ${BRANCH} =~ legacy|current && $(dpkg --print-architecture) == arm64 ]]; then
-
-		local uboot_name=${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb
-		display_alert "Compile u-boot is not supported, only copy precompiled deb package" "$uboot_name" "info"
-		cp "${EXTER}/cache/debs/h618/$uboot_name" "${DEB_STORAGE}/u-boot/"
-	else
-
 	# not optimal, but extra cleaning before overlayfs_wrapper should keep sources directory clean
 	if [[ $CLEAN_LEVEL == *make* ]]; then
 		display_alert "Cleaning" "$BOOTSOURCEDIR" "info"
@@ -191,11 +97,6 @@ compile_uboot()
 		# create patch for manual source changes
 		[[ $CREATE_PATCHES == yes ]] && userpatch_create "u-boot"
 
-		if [[ -n $ATFSOURCE ]]; then
-			cp -Rv "${atftempdir}"/*.bin .
-			rm -rf "${atftempdir}"
-		fi
-
 		echo -e "\n\t== u-boot make $BOOTCONFIG ==\n" >> "${DEST}"/${LOG_SUBPATH}/compilation.log
 		eval CCACHE_BASEDIR="$(pwd)" env PATH="${toolchain}:${toolchain2}:${PATH}" \
 			'make $CTHREADS $BOOTCONFIG \
@@ -223,7 +124,6 @@ compile_uboot()
 
 			fi
 
-			[[ -f tools/logos/udoo.bmp ]] && cp "${EXTER}"/packages/blobs/splash/udoo.bmp tools/logos/udoo.bmp
 			touch .scmversion
 
 			# $BOOTDELAY can be set in board family config, ensure autoboot can be stopped even if set to 0
@@ -266,28 +166,9 @@ compile_uboot()
 				f_dst=$(basename "${f_src}")
 			fi
 			[[ ! -f $f_src ]] && exit_with_error "U-boot file not found" "$(basename "${f_src}")"
-			if [[ "${version}" =~ 2014.07|2011.09 ]]; then
-				cp "${f_src}" "$uboottempdir/packout/${f_dst}"
-			else
-				cp "${f_src}" "$uboottempdir/${uboot_name}/usr/lib/${uboot_name}/${f_dst}"
-			fi
+			cp "${f_src}" "$uboottempdir/${uboot_name}/usr/lib/${uboot_name}/${f_dst}"
 		done
 	done <<< "$UBOOT_TARGET_MAP"
-
-	if [[ $PACK_UBOOT == "yes" ]];then
-		if [[ $BOARDFAMILY =~ sun50iw1 ]]; then
-			if [[ $(type -t u-boot_tweaks) == function ]]; then
-				u-boot_tweaks ${uboot_name}
-			else
-				exit_with_error "U-boot pack failed"
-			fi
-		else
-			pack_uboot
-			cp $uboottempdir/packout/{boot0_sdcard.fex,boot_package.fex} "${SRC}/.tmp/${uboot_name}/usr/lib/${uboot_name}/"
-			cp $uboottempdir/packout/dts/${BOARD}-u-boot.dts "${SRC}/.tmp/${uboot_name}/usr/lib/u-boot/"
-		fi
-		cd "${ubootdir}" || exit
-	fi
 
 	# declare -f on non-defined function does not do anything
 	cat <<-EOF > "$uboottempdir/${uboot_name}/usr/lib/u-boot/platform_install.sh"
@@ -319,19 +200,14 @@ compile_uboot()
 	# copy license files from typical locations
 	[[ -f COPYING ]] && cp COPYING "$uboottempdir/${uboot_name}/usr/lib/u-boot/LICENSE"
 	[[ -f Licenses/README ]] && cp Licenses/README "$uboottempdir/${uboot_name}/usr/lib/u-boot/LICENSE"
-	[[ -n $atftempdir && -f $atftempdir/license.md ]] && cp "${atftempdir}/license.md" "$uboottempdir/${uboot_name}/usr/lib/u-boot/LICENSE.atf"
-
 	display_alert "Building deb" "${uboot_name}.deb" "info"
 	fakeroot dpkg-deb -b -Z${DEB_COMPRESS} "$uboottempdir/${uboot_name}" "$uboottempdir/${uboot_name}.deb" >> "${DEST}"/${LOG_SUBPATH}/output.log 2>&1
 	rm -rf "$uboottempdir/${uboot_name}"
-	[[ -n $atftempdir ]] && rm -rf "${atftempdir}"
 
 	[[ ! -f $uboottempdir/${uboot_name}.deb ]] && exit_with_error "Building u-boot package failed"
 
 	rsync --remove-source-files -rq "$uboottempdir/${uboot_name}.deb" "${DEB_STORAGE}/u-boot/"
 	rm -rf "$uboottempdir"
-
-	fi
 }
 
 create_linux-source_package ()
@@ -507,14 +383,8 @@ CUSTOM_KERNEL_CONFIG
 	cp "$EXTER"/patch/misc/headers-debian-byteshift.patch /tmp
 
 	if [[ $KERNEL_CONFIGURE != yes ]]; then
-		if [[ $BRANCH == legacy && ! $BOARDFAMILY =~ "rockchip-rk3588"|"rockchip-rk356x"|"sun60iw2" ]]; then
-			eval CCACHE_BASEDIR="$(pwd)" env PATH="${toolchain}:${PATH}" \
-				'make ARCH=$ARCHITECTURE CROSS_COMPILE="$CCACHE $KERNEL_COMPILER" silentoldconfig'
-		else
-			# TODO: check if required
-			eval CCACHE_BASEDIR="$(pwd)" env PATH="${toolchain}:${PATH}" \
-				'make ARCH=$ARCHITECTURE CROSS_COMPILE="$CCACHE $KERNEL_COMPILER" olddefconfig'
-		fi
+		eval CCACHE_BASEDIR="$(pwd)" env PATH="${toolchain}:${PATH}" \
+			'make ARCH=$ARCHITECTURE CROSS_COMPILE="$CCACHE $KERNEL_COMPILER" olddefconfig'
 	else
 		eval CCACHE_BASEDIR="$(pwd)" env PATH="${toolchain}:${PATH}" \
 			'make $CTHREADS ARCH=$ARCHITECTURE CROSS_COMPILE="$CCACHE $KERNEL_COMPILER" oldconfig'
@@ -562,13 +432,6 @@ CUSTOM_KERNEL_CONFIG
 *Kernel image and modules are built, packages are not created yet*
 The current directory is the kernel tree. CROSS_COMPILE is available as KERNEL_COMPILER and toolchain.
 POST_KERNEL_BUILD
-
-	if [[ ${BOARDFAMILY} == cix ]]; then
-		[[ -d ${SRC}/output/cix ]] && rm -rf ${SRC}/output/cix
-		mkdir -p ${SRC}/output/cix/ > /dev/null 2>&1
-		cp ${kerneldir}/arch/arm64/boot/Image ${SRC}/output/cix/
-		cp ${kerneldir}/arch/arm64/boot/dts/cix/sky1-*dtb ${SRC}/output/cix/
-	fi
 
 	# different packaging for 4.3+
 	if linux-version compare "${version}" ge 4.3; then
@@ -813,20 +676,6 @@ compile_sunxi_tools()
 		make -s tools >/dev/null
 		mkdir -p /usr/local/bin/
 		make install-tools >/dev/null 2>&1
-		improved_git rev-parse @ 2>/dev/null > .commit_id
-	fi
-}
-
-install_rkbin_tools()
-{
-	# install only if git commit hash changed
-	cd "${EXTER}"/cache/sources/rkbin-tools || exit
-	# need to check if /usr/local/bin/sunxi-fexc to detect new Docker containers with old cached sources
-	if [[ ! -f .commit_id || $(improved_git rev-parse @ 2>/dev/null) != $(<.commit_id) || ! -f /usr/local/bin/loaderimage ]]; then
-		display_alert "Installing" "rkbin-tools" "info"
-		mkdir -p /usr/local/bin/
-		install -m 755 tools/loaderimage /usr/local/bin/
-		install -m 755 tools/trust_merger /usr/local/bin/
 		improved_git rev-parse @ 2>/dev/null > .commit_id
 	fi
 }

@@ -44,7 +44,11 @@ apply_image_config() {
 		display_alert "Release is not available for this kernel branch" "${RELEASE} / ${BRANCH}" "err"
 		exit 1
 	fi
-	INSTALL_HEADERS="yes"
+	# Headers let out-of-tree modules build on the board; minimal keeps the image small.
+	[[ ${BUILD_MINIMAL} != yes ]] && INSTALL_HEADERS="yes"
+	# xz on the kernel packages costs minutes per build. zstd is not readable by bullseye dpkg.
+	[[ -z ${DEB_COMPRESS+x} ]] && DEB_COMPRESS="gzip"
+	[[ -z ${COMPRESS_OUTPUTIMAGE+x} ]] && COMPRESS_OUTPUTIMAGE="sha,xz"
 	[[ -z ${BUILD_OPT+x} ]] && BUILD_OPT="image"
 	[[ -z ${KERNEL_CONFIGURE+x} ]] && KERNEL_CONFIGURE="no"
 

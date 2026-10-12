@@ -158,7 +158,7 @@ get_package_list_hash()
 
 # create_sources_list <release> <basedir>
 #
-# <release>: buster|bullseye|bookworm|trixie|bionic|focal|jammy|noble|resolute|hirsute|sid
+# <release>: bullseye|bookworm|trixie|jammy|resolute
 # <basedir>: path to root directory
 #
 create_sources_list()
@@ -168,22 +168,6 @@ create_sources_list()
 	[[ -z $basedir ]] && exit_with_error "No basedir passed to create_sources_list"
 
 	case $release in
-	stretch|buster)
-	cat <<-EOF > "${basedir}"/etc/apt/sources.list
-	deb http://${DEBIAN_MIRROR} $release main contrib non-free
-	#deb-src http://${DEBIAN_MIRROR} $release main contrib non-free
-
-	deb http://${DEBIAN_MIRROR} ${release}-updates main contrib non-free
-	#deb-src http://${DEBIAN_MIRROR} ${release}-updates main contrib non-free
-
-	deb http://${DEBIAN_MIRROR} ${release}-backports main contrib non-free
-	#deb-src http://${DEBIAN_MIRROR} ${release}-backports main contrib non-free
-
-	deb http://${DEBIAN_SECURTY} ${release}/updates main contrib non-free
-	#deb-src http://${DEBIAN_SECURTY} ${release}/updates main contrib non-free
-	EOF
-	;;
-
 	bullseye)
 	cat <<-EOF > "${basedir}"/etc/apt/sources.list
 	deb https://${DEBIAN_MIRROR} $release main contrib non-free
@@ -216,18 +200,7 @@ create_sources_list()
 	EOF
 	;;
 
-	sid) # sid is permanent unstable development and has no such thing as updates or security
-	cat <<- EOF > "${basedir}"/etc/apt/sources.list
-	deb https://snapshot.debian.org/archive/debian-ports/20221225T084846Z unstable main
-	#deb http://${DEBIAN_MIRROR} $release main contrib non-free non-free-firmware
-	#deb-src http://${DEBIAN_MIRROR} $release main contrib non-free non-free-firmware
-
-	#deb http://${DEBIAN_MIRROR} unstable main contrib non-free non-free-firmware
-	#deb-src http://${DEBIAN_MIRROR} unstable main contrib non-free non-free-firmware
-	EOF
-	;;
-
-	xenial|bionic|focal|hirsute|impish|jammy)
+	jammy)
 	cat <<-EOF > "${basedir}"/etc/apt/sources.list
 	deb http://${UBUNTU_MIRROR} $release main restricted universe multiverse
 	#deb-src http://${UBUNTU_MIRROR} $release main restricted universe multiverse
@@ -243,7 +216,7 @@ create_sources_list()
 	EOF
 	;;
 
-	noble|resolute)
+	resolute)
 	distro="ubuntu"
 	# Drop deboostrap sources leftovers
 	rm -f "${basedir}/etc/apt/sources.list"
@@ -257,37 +230,6 @@ create_sources_list()
 	EOF
 	;;
 
-	raspi)
-	cat <<-EOF > "${basedir}"/etc/apt/sources.list
-	deb http://${DEBIAN_MIRROR} bullseye main contrib non-free
-	#deb-src http://${DEBIAN_MIRROR} bullseye main contrib non-free
-
-	deb http://${DEBIAN_MIRROR} bullseye-updates main contrib non-free
-	#deb-src http://${DEBIAN_MIRROR} bullseye-updates main contrib non-free
-
-	deb http://${DEBIAN_MIRROR} bullseye-backports main contrib non-free
-	#deb-src http://${DEBIAN_MIRROR} bullseye-backports main contrib non-free
-
-	deb http://${DEBIAN_SECURTY} bullseye-security main contrib non-free
-	#deb-src http://${DEBIAN_SECURTY} bullseye-security main contrib non-free
-	EOF
-
-	cat <<-EOF > "${basedir}"/etc/apt/sources.list.d/raspi.list
-	deb http://${RASPI_MIRROR} bullseye main
-	# Uncomment line below then 'apt-get update' to enable 'apt-get source'
-	#deb-src http://archive.raspberrypi.org/debian/ bullseye main
-	EOF
-
-	if [ -n "$APT_PROXY" ]; then
-		install -m 644 files/51cache "${APT_PROXY}/etc/apt/apt.conf.d/51cache"
-		sed "${basedir}/etc/apt/apt.conf.d/51cache" -i -e "s|APT_PROXY|${APT_PROXY}|"
-	else
-		rm -f "${basedir}/etc/apt/apt.conf.d/51cache"
-	fi
-
-	cat ${EXTER}/packages/raspi/stage0/00-configure-apt/files/raspberrypi.gpg.key | gpg --dearmor > "${basedir}/raspberrypi-archive-stable.gpg"
-	install -m 644 "${basedir}/raspberrypi-archive-stable.gpg" "${basedir}/etc/apt/trusted.gpg.d/"
-	;;
 	esac
 
 	# stage: add armbian repository and install key
@@ -1426,7 +1368,6 @@ prepare_host()
 	export LC_ALL="C.UTF-8"
 
 	# packages list for host
-	# NOTE: please sync any changes here with the Dockerfile and Vagrantfile
 
 	local hostdeps="acl aria2 bc binfmt-support bison btrfs-progs            \
 	build-essential  ca-certificates ccache cpio cryptsetup curl              \
@@ -1582,20 +1523,11 @@ prepare_host()
 			display_alert "Checking for external GCC compilers" "" "info"
 			# download external Linaro compiler and missing special dependencies since they are needed for certain sources
 
-		case ${BOARDFAMILY} in
-			cix)
-			local toolchains=(
-				"arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-linux-gnu.tar.xz"
-				)
-			;;
-			*)
-			# U-Boot is built with arm-linux-gnueabi-gcc 7. Kernel and the PowerVR module need aarch64 gcc 11.
-			local toolchains=(
-				"gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabi.tar.xz"
-				"gcc-arm-11.2-2022.02-x86_64-aarch64-none-linux-gnu.tar.xz"
-				)
-			;;
-		esac
+		# U-Boot is built with arm-linux-gnueabi-gcc 7. Kernel and the PowerVR module need aarch64 gcc 11.
+		local toolchains=(
+			"gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabi.tar.xz"
+			"gcc-arm-11.2-2022.02-x86_64-aarch64-none-linux-gnu.tar.xz"
+			)
 
 		USE_TORRENT_STATUS=${USE_TORRENT}
 		USE_TORRENT="no"
@@ -1666,11 +1598,6 @@ function webseed ()
 		https://mirrors.bfsu.edu.cn/armbian-releases/
 		)
 	fi
-	if [[ ${filename} == *ky* ]] || [[ ${filename} == *arm-gnu-toolchain* ]]; then
-		WEBSEED=(
-		http://www.iplaystore.cn/upload/
-		)
-	fi
 	for toolchain in ${WEBSEED[@]}; do
 		text="${text} ${toolchain}${1}"
 	done
@@ -1697,10 +1624,6 @@ download_and_verify()
 			local server=${ARMBIAN_MIRROR}
         fi
 
-	if [[ ${filename} == *ky* ]] || [[ ${filename} == *arm-gnu-toolchain* ]]; then
-		server="http://www.iplaystore.cn/upload/"
-	fi
-
 	if [[ -f ${localdir}/${dirname}/.download-complete ]]; then
 		return
 	fi
@@ -1710,18 +1633,12 @@ download_and_verify()
 	if [[ $? -ne 7 && $? -ne 22 && $? -ne 0 ]]; then
 		display_alert "Timeout from $server" "retrying" "info"
 		server="https://mirrors.tuna.tsinghua.edu.cn/armbian-releases/"
-		if [[ ${filename} == *ky* ]] || [[ ${filename} == *arm-gnu-toolchain* ]]; then
-			server="http://www.iplaystore.cn/upload/"
-		fi
 
 		# switch to another china mirror if tuna timeouts
 		timeout 10 curl --head --fail --silent ${server}${remotedir}/${filename} 2>&1 >/dev/null
 		if [[ $? -ne 7 && $? -ne 22 && $? -ne 0 ]]; then
 			display_alert "Timeout from $server" "retrying" "info"
 			server="https://mirrors.bfsu.edu.cn/armbian-releases/"
-			if [[ ${filename} == *ky* ]] || [[ ${filename} == *arm-gnu-toolchain* ]]; then
-				server="http://www.iplaystore.cn/upload/"
-			fi
 		fi
 	fi
 
@@ -1893,141 +1810,3 @@ show_checklist_variables ()
 		fi
 	done
 }
-
-get_orangepi_url()
-{
-	if [[ ${GITEE_SERVER} == yes ]]; then
-		echo "https://gitee.com/orangepi-xunlong"
-	else
-		echo "https://github.com/orangepi-xunlong"
-	fi
-}
-
-install_wiringop()
-{
-	install_deb_chroot "$EXTER/cache/debs/${ARCH}/wiringpi-2.58-1.deb"
-	chroot "${SDCARD}" /bin/bash -c "apt-mark hold wiringpi" >> "${DEST}"/${LOG_SUBPATH}/install.log 2>&1
-	rm $SDCARD/root/*.deb >/dev/null 2>&1
-}
-
-
-install_310b-npu-driver()
-{
-	local driver_path="$EXTER/cache/sources/ascend-driver"
-	local driver_name="Ascend-hdk-310b-npu-driver_23.0.5_linux-aarch64-opiaimax.run"
-	local driver=${driver_path}/${driver_name}
-
-	if [[ -f "${driver}" ]]; then
-		display_alert "Installing" "$driver_name" "info"
-		cp "${driver}" "${SDCARD}/opt/"
-		chmod +x "${SDCARD}/opt/Ascend-hdk-310b-npu-driver_23.0.5_linux-aarch64-opiaimax.run"
-		chroot "${SDCARD}" /bin/bash -c "/opt/${driver_name} --chroot --full --install-username=orangepi --install-usergroup=orangepi --install-for-all"
-	fi
-}
-
-
-install_docker() {
-
-	[[ $install_docker != yes ]] && return
-
-	display_alert "Installing" "docker" "info"
-	# software-properties-common removed from Debian 13+
-	sp_common=" software-properties-common"; [[ $RELEASE == trixie ]] && sp_common=""
-	chroot "${SDCARD}" /bin/bash -c "apt-get install -y -qq apt-transport-https ca-certificates curl gnupg2${sp_common} >/dev/null 2>&1"
-
-	case ${RELEASE} in
-		buster|bullseye|bookworm|trixie)
-		distributor_id="debian"
-		;;
-		xenial|bionic|focal|jammy|noble|plucky|resolute)
-		distributor_id="ubuntu"
-		;;
-	esac
-
-	#if [[ ${SELECTED_CONFIGURATION} == desktop ]]; then
-	#	mirror_url=https://repo.huaweicloud.com
-	#else
-		mirror_url=https://mirrors.aliyun.com
-	#fi
-
-	chroot "${SDCARD}" /bin/bash -c "curl -fsSL ${mirror_url}/docker-ce/linux/${distributor_id}/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg"
-	echo "deb [arch=${ARCH} signed-by=/etc/apt/trusted.gpg.d/docker.gpg] ${mirror_url}/docker-ce/linux/${distributor_id} ${RELEASE} stable" > "${SDCARD}"/etc/apt/sources.list.d/docker.list
-
-	chroot "${SDCARD}" /bin/bash -c "apt-get update"
-	chroot "${SDCARD}" /bin/bash -c "apt-get install -y -qq docker-ce docker-ce-cli containerd.io"
-	chroot "${SDCARD}" /bin/bash -c "sudo groupadd docker"
-
-	run_on_sdcard "systemctl --no-reload disable docker.service"
-}
-
-
-#function run_after_build()
-#{
-#	chown -R $(logname).$(logname) $BOOTSOURCEDIR
-#	chown -R $(logname).$(logname) $LINUXSOURCEDIR
-#	chown -R $(logname).$(logname) $USERPATCHES_PATH
-#	chown -R $(logname).$(logname) $DEST/{config,debs,debug,images,patch}
-#
-#	if [[ $DEBUG_DEB == yes && $BUILD_OPT =~ u-boot|kernel ]]; then
-#
-#		[[ -z $REMOTEIP ]] && exit_with_error "The remote IP address has not been set" ""
-#		[[ -z $PASS_ROOT ]] && PASS_ROOT="orangepi"
-#		[[ -z $MMC_DEV ]] && MMC_DEV="tfcard"
-#
-#		#ssh-keygen -f "~/.ssh/known_hosts" -R ${REMOTEIP}
-#		local num=0
-#		while true;
-#		do
-#			ping ${REMOTEIP} -c 1 > /dev/null 2>&1
-#
-#			if [[ $? == 0 ]]; then
-#				echo " "
-#				break
-#			fi
-#
-#			if [[ $num == 0 ]]; then
-#				display_alert "${BOARD} network cannot be connected" "${REMOTEIP}" "wrn"
-#				((num++))
-#			fi
-#
-#			echo -e ".\c"
-#		done
-#		display_alert "${BOARD} network is connected" "${REMOTEIP}" "info"
-#
-#		if [[ $BUILD_OPT == u-boot ]]; then
-#			sshpass -p ${PASS_ROOT} scp ${DEB_STORAGE}/u-boot/${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb root@${REMOTEIP}:/root
-#			display_alert "Uninstall deb package" "linux-u-boot-${BOARD}-${BRANCH}" "info"
-#			sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "apt-get purge -y linux-u-boot-${BOARD}-${BRANCH}"
-#			display_alert "Install deb package" "${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb" "info"
-#			sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "dpkg -i /root/${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb"
-#
-#			if [[ $MMC_DEV == emmc ]]; then
-#				display_alert "Burn the U-Boot into EMMC" "" "info"
-#				sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "dd bs=1k seek=8 if=/usr/lib/linux-u-boot-legacy-orangepi400_2.1.0_arm64/boot0_sdcard.fex of=/dev/mmcblk0"
-#				sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "dd bs=1k seek=16400 if=/usr/lib/linux-u-boot-legacy-orangepi400_2.1.0_arm64/boot_package.fex of=/dev/mmcblk0"
-#				sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "sync"
-#			else
-#				display_alert "Burn the U-Boot into TF card" "" "info"
-#				sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "nand-sata-install DEBUG_UBOOT"
-#				sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "sync"
-#				sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "reboot"
-#			fi
-#		fi
-#
-#		if [[ $BUILD_OPT == kernel ]]; then
-#			sshpass -p ${PASS_ROOT} scp ${DEB_STORAGE}/linux-image-${BRANCH}-${LINUXFAMILY}_${REVISION}_${ARCH}.deb root@${REMOTEIP}:/root
-#			sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "apt-get purge -y linux-image-${BRANCH}-${LINUXFAMILY}"
-#			sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "dpkg -i /root/linux-image-${BRANCH}-${LINUXFAMILY}_${REVISION}_${ARCH}.deb"
-#			if [[ $BRANCH == current && $BOARD =~ orangepizero2|orangepi400 ]]; then
-#				sshpass -p ${PASS_ROOT} scp ${LINUXSOURCEDIR}/arch/arm64/boot/dts/allwinner/sun50i-h616-orangepi-*.dtb root@${REMOTEIP}:/boot/dtb/allwinner/
-#			fi
-#
-#			sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "sync"
-#			sshpass -p ${PASS_ROOT} ssh root@${REMOTEIP} "reboot"
-#		fi
-#	fi
-#
-#	if [[ $DEBUG_DEB == yes && $BUILD_OPT == image ]]; then
-#		scp ${destimg}/*.img ${PC_NAME}@${PC_IP}:${PC_DIR}
-#	fi
-#}

@@ -57,29 +57,22 @@ PRE_INSTALL_DISTRIBUTION_SPECIFIC
 	# stage: install kernel and u-boot packages
 	# install distribution and board specific applications
 
-	if [[ ${RELEASE} == "raspi" ]]; then
-		install_opi_specific
-	else
-		install_distribution_specific
-		install_common
+	install_distribution_specific
+	install_common
 
-		# install locally built packages or install pre-built packages from orangepi
-		[[ $EXTERNAL_NEW == compile || $EXTERNAL_NEW == prebuilt ]] && chroot_installpackages_local
+	# install locally built packages or install pre-built packages from orangepi
+	[[ $EXTERNAL_NEW == compile || $EXTERNAL_NEW == prebuilt ]] && chroot_installpackages_local
 
-		#[[ $EXTERNAL_NEW == prebuilt ]] && chroot_installpackages "yes"
+	# stage: user customization script
+	# NOTE: installing too many packages may fill tmpfs mount
+	customize_image
 
-		# stage: user customization script
-		# NOTE: installing too many packages may fill tmpfs mount
-		customize_image
+	# remove packages that are no longer needed. Since we have intrudoced uninstall feature, we might want to clean things that are no longer needed
+	display_alert "No longer needed packages" "purge" "info"
+	chroot $SDCARD /bin/bash -c "apt-get autoremove -y"  >/dev/null 2>&1
 
-		# remove packages that are no longer needed. Since we have intrudoced uninstall feature, we might want to clean things that are no longer needed
-		display_alert "No longer needed packages" "purge" "info"
-		chroot $SDCARD /bin/bash -c "apt-get autoremove -y"  >/dev/null 2>&1
-
-		# create list of installed packages for debug purposes
-		chroot $SDCARD /bin/bash -c "dpkg --get-selections" | grep -v deinstall | awk '{print $1}' | cut -f1 -d':' > $DEST/${LOG_SUBPATH}/installed-packages-${RELEASE}$([[ ${BUILD_MINIMAL} == yes ]] && echo "-minimal")$([[ ${BUILD_DESKTOP} == yes  ]] && echo "-desktop").list 2>&1
-
-	fi
+	# create list of installed packages for debug purposes
+	chroot $SDCARD /bin/bash -c "dpkg --get-selections" | grep -v deinstall | awk '{print $1}' | cut -f1 -d':' > $DEST/${LOG_SUBPATH}/installed-packages-${RELEASE}$([[ ${BUILD_MINIMAL} == yes ]] && echo "-minimal")$([[ ${BUILD_DESKTOP} == yes  ]] && echo "-desktop").list 2>&1
 
 	# Packages installed above can call locale-gen. Compile the configured locale last.
 	configure_image_locale
@@ -93,13 +86,8 @@ PRE_INSTALL_DISTRIBUTION_SPECIFIC
 		display_alert "Starting FEL boot" "$BOARD" "info"
 		source $SRC/scripts/fel-load.sh
 	else
-		if [[ $BOARDFAMILY == "cix" ]]; then
-			create_cix_rootfs
-			create_cix_image
-		else
-			prepare_partitions
-			create_image
-		fi
+		prepare_partitions
+		create_image
 	fi
 
 	# stage: unmount tmpfs
@@ -203,32 +191,6 @@ create_rootfs_cache()
 		rm $SDCARD/etc/resolv.conf
 		echo "nameserver $NAMESERVER" >> $SDCARD/etc/resolv.conf
 		create_sources_list "$RELEASE" "$SDCARD/"
-	elif [[ $RELEASE == "raspi" ]]; then
-		display_alert "local not found" "Creating new rootfs cache for $RELEASE" "info"
-
-		cd $SDCARD # this will prevent error sh: 0: getcwd() failed
-
-		bootstrap bullseye "$SDCARD" "https://mirrors.ustc.edu.cn/debian/"
-
-		mount_chroot "$SDCARD"
-
-		display_alert "Diverting" "initctl/start-stop-daemon" "info"
-		# policy-rc.d script prevents starting or reloading services during image creation
-		printf '#!/bin/sh\nexit 101' > $SDCARD/usr/sbin/policy-rc.d
-		LC_ALL=C LANG=C chroot $SDCARD /bin/bash -c "dpkg-divert --quiet --local --rename --add /sbin/initctl" &> /dev/null
-		LC_ALL=C LANG=C chroot $SDCARD /bin/bash -c "dpkg-divert --quiet --local --rename --add /sbin/start-stop-daemon" &> /dev/null
-		printf '#!/bin/sh\necho "Warning: Fake start-stop-daemon called, doing nothing"' > $SDCARD/sbin/start-stop-daemon
-		printf '#!/bin/sh\necho "Warning: Fake initctl called, doing nothing"' > $SDCARD/sbin/initctl
-		chmod 755 $SDCARD/usr/sbin/policy-rc.d
-		chmod 755 $SDCARD/sbin/initctl
-		chmod 755 $SDCARD/sbin/start-stop-daemon
-
-		install_raspi_specific
-
-		umount_chroot "$SDCARD"
-
-		tar cp --xattrs --directory=$SDCARD/ --exclude='./dev/*' --exclude='./proc/*' --exclude='./run/*' --exclude='./tmp/*' \
-			--exclude='./sys/*' . | pv -p -b -r -s $(du -sb $SDCARD/ | cut -f1) -N "$display_name" | lz4 -5 -c > $cache_fname
 	else
 		display_alert "local not found" "Creating new rootfs cache for $RELEASE" "info"
 
@@ -392,10 +354,6 @@ create_rootfs_cache()
 
 			[[ ${PIPESTATUS[0]} -ne 0 ]] && exit_with_error "Installation of Orange Pi desktop packages for ${BRANCH} ${BOARD} ${RELEASE} ${DESKTOP_APPGROUPS_SELECTED} ${DESKTOP_ENVIRONMENT} ${BUILD_MINIMAL} failed"
 		fi
-
-		install_docker
-		[[ ${BOARDFAMILY} == "starfive2" ]] && jh7110_install_libs
-		[[ ${BOARDFAMILY} == "cix" ]] && install_cix_debs
 
 		# Remove packages from packages.uninstall
 
@@ -784,9 +742,7 @@ PREPARE_IMAGE_SIZE
 		else
 			sed -i 's/^setenv rootdev .*/setenv rootdev "'$rootfs'"/' $SDCARD/boot/boot.ini
 		fi
-		if [[ $LINUXFAMILY != meson64 ]]; then
-			[[ -f $SDCARD/boot/orangepiEnv.txt ]] && rm $SDCARD/boot/orangepiEnv.txt
-		fi
+		[[ -f $SDCARD/boot/orangepiEnv.txt ]] && rm $SDCARD/boot/orangepiEnv.txt
 	fi
 
 	# if we have a headless device, set console to DEFAULT_CONSOLE
@@ -871,11 +827,6 @@ create_image()
 	fi
 
 	local version="${BOARD^}_${REVISION}_${DISTRIBUTION,}_${RELEASE}_${IMAGE_TYPE}"${DESKTOP_ENVIRONMENT:+_$DESKTOP_ENVIRONMENT}"_linux$(grab_version "$LINUXSOURCEDIR")"
-
-	if [[ ${RELEASE} == "raspi" ]]; then
-		local version="${BOARD^}_${REVISION}_raspios_bullseye_${IMAGE_TYPE}"${DESKTOP_ENVIRONMENT:+_$DESKTOP_ENVIRONMENT}"_linux$(grab_version "$LINUXSOURCEDIR")"
-	fi
-
 	[[ $ROOTFS_TYPE == nfs ]] && version=${version}_nfsboot
 
 	destimg=$DEST/images/${version}
@@ -1037,8 +988,7 @@ POST_UMOUNT_FINAL_IMAGE
 		fi
 
 	fi
-	#display_alert "Done building" "${DESTIMG}/${version}.img" "info"
-	display_alert "Done building" "${FINALDEST}/${version}.img" "info"
+	display_alert "Done building" "${FINALDEST}/${version}.img${compression_type}" "info"
 
 	# call custom post build hook
 	[[ $(type -t post_build_image) == function ]] && post_build_image "${DESTIMG}/${version}.img"
@@ -1079,9 +1029,8 @@ POST_UMOUNT_FINAL_IMAGE
 				display_alert "Writing failed" "${version}.img" "err"
 			fi
 		fi
-	elif [[ `systemd-detect-virt` == 'docker' && -n $CARD_DEVICE ]]; then
-		# display warning when we want to write sd card under Docker
-		display_alert "Can't write to $CARD_DEVICE" "Enable docker privileged mode in config-docker.conf" "wrn"
+	elif [[ -n $CARD_DEVICE ]]; then
+		display_alert "Not writing $CARD_DEVICE" "set COMPRESS_OUTPUTIMAGE=img to keep a raw image" "wrn"
 	fi
 
 } #############################################################################

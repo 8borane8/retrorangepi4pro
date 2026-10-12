@@ -87,8 +87,6 @@ source "${SRC}"/scripts/makeboarddeb.sh		# board support package
 source "${SRC}"/scripts/general.sh		# general functions
 # shellcheck source=chroot-buildpackages.sh
 source "${SRC}"/scripts/chroot-buildpackages.sh	# chroot packages building
-# shellcheck source=pack.sh
-source "${SRC}"/scripts/pack-uboot.sh
 
 
 # set log path
@@ -173,18 +171,12 @@ LINUXFAMILY="${BOARDFAMILY}"
 # if BUILD_OPT, KERNEL_CONFIGURE, BOARD, BRANCH or RELEASE are not set, display selection menu
 if [[ -z $BUILD_OPT ]]; then
 
-	if [[ $BOARDFAMILY != "cix" ]]; then
-		options+=("u-boot"	 "U-boot package")
-	fi
+	options+=("u-boot"	 "U-boot package")
 	options+=("kernel"	 "Kernel package")
 	options+=("rootfs"	 "Rootfs and all deb packages")
 	options+=("image"	 "Full OS image for flashing")
 
-	if [[ $BOARDFAMILY != "cix" ]]; then
-		menustr="Compile image | rootfs | kernel | u-boot"
-	else
-		menustr="Compile image | rootfs | kernel"
-	fi
+	menustr="Compile image | rootfs | kernel | u-boot"
 	BUILD_OPT=$(whiptail --title "${titlestr}" --backtitle "${backtitle}" --notags \
 			  --menu "${menustr}" "${TTY_Y}" "${TTY_X}" $((TTY_Y - 8))  \
 			  --cancel-button Exit --ok-button Select "${options[@]}" \
@@ -356,7 +348,6 @@ branch2dir() {
 
 BOOTSOURCEDIR="${BOOTDIR}/$(branch2dir "${BOOTBRANCH}")"
 LINUXSOURCEDIR="${KERNELDIR}/$(branch2dir "${KERNELBRANCH}")"
-[[ -n $ATFSOURCE ]] && ATFSOURCEDIR="${ATFDIR}/$(branch2dir "${ATFBRANCH}")"
 
 BSP_CLI_PACKAGE_NAME="orangepi-bsp-cli-${BOARD}"
 BSP_CLI_PACKAGE_FULLNAME="${BSP_CLI_PACKAGE_NAME}_${REVISION}_${ARCH}"
@@ -388,19 +379,8 @@ if [[ ${IGNORE_UPDATES} != yes ]]; then
 
 	display_alert "Downloading sources" "" "info"
 
-	if [[ $BOARDFAMILY != "cix" ]]; then
-
-		[[ $BUILD_OPT =~ u-boot|image ]] && fetch_from_repo "$BOOTSOURCE" "$BOOTDIR" "$BOOTBRANCH" "yes"
-
-	fi
-
+	[[ $BUILD_OPT =~ u-boot|image ]] && fetch_from_repo "$BOOTSOURCE" "$BOOTDIR" "$BOOTBRANCH" "yes"
 	[[ $BUILD_OPT =~ kernel|image ]] && fetch_from_repo "$KERNELSOURCE" "$KERNELDIR" "$KERNELBRANCH" "yes"
-
-	if [[ -n ${ATFSOURCE} ]]; then
-
-		[[ ${BUILD_OPT} =~ u-boot|image ]] && fetch_from_repo "$ATFSOURCE" "${EXTER}/cache/sources/$ATFDIR" "$ATFBRANCH" "yes"
-
-	fi
 
 	if [[ ${BUILD_OPT} == image ]]; then
 		if [[ ${GITEE_SERVER} == yes ]]; then
@@ -428,47 +408,46 @@ done
 # Compile u-boot if packed .deb does not exist or use the one from Orange Pi
 if [[ $BUILD_OPT == u-boot || $BUILD_OPT == image ]]; then
 
-	if [[ $BOARDFAMILY != "cix" ]]; then
-		if [[ ! -f "${DEB_STORAGE}"/u-boot/${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb ]]; then
+	[[ ! -f "${DEB_STORAGE}"/u-boot/${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb ]] && compile_uboot
 
-			[[ -n "${ATFSOURCE}" && "${REPOSITORY_INSTALL}" != *u-boot* ]] && compile_atf
-
-			[[ ${REPOSITORY_INSTALL} != *u-boot* ]] && compile_uboot
-		fi
-
-		if [[ $BUILD_OPT == "u-boot" ]]; then
-			unset BUILD_MINIMAL BUILD_DESKTOP COMPRESS_OUTPUTIMAGE
-			display_alert "U-boot build done" "@host" "info"
-			display_alert "Target directory" "${DEB_STORAGE}/u-boot" "info"
-			display_alert "File name" "${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb" "info"
-		fi
+	if [[ $BUILD_OPT == "u-boot" ]]; then
+		unset BUILD_MINIMAL BUILD_DESKTOP COMPRESS_OUTPUTIMAGE
+		display_alert "U-boot build done" "@host" "info"
+		display_alert "Target directory" "${DEB_STORAGE}/u-boot" "info"
+		display_alert "File name" "${CHOSEN_UBOOT}_${REVISION}_${ARCH}.deb" "info"
 	fi
 fi
 
 # Compile kernel if packed .deb does not exist or use the one from Orange Pi
 if [[ $BUILD_OPT == kernel || $BUILD_OPT == image ]]; then
 
-	kernel_ext_stamp="${DEB_STORAGE}/.kernel-extensions-${BRANCH}-${LINUXFAMILY}"
-	kernel_cfg="${IMAGE_KERNEL_OPTIONS[*]}"
-	mkdir -p "${DEB_STORAGE}"
-	if [[ -f "${kernel_ext_stamp}" && "$(cat "${kernel_ext_stamp}")" != "${kernel_cfg}" ]]; then
-		display_alert "Kernel config changed" "rebuilding the kernel" "info"
-		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL}_${REVISION}_${ARCH}.deb"
-		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL/image/dtb}_${REVISION}_${ARCH}.deb"
-		rm -f "${DEB_STORAGE}/${CHOSEN_KERNEL/image/headers}_${REVISION}_${ARCH}.deb"
-	fi
-	printf '%s\n' "${kernel_cfg}" > "${kernel_ext_stamp}"
+	# One cached kernel per source commit, config file and option set, so switching
+	# profiles does not rebuild. pvrsrvkm.ko is cached with it: it only loads on the
+	# kernel it was built against.
+	kernel_debs=("${CHOSEN_KERNEL}" "${CHOSEN_KERNEL/image/dtb}" "${CHOSEN_KERNEL/image/headers}")
+	kernel_debs=("${kernel_debs[@]/%/_${REVISION}_${ARCH}.deb}")
+	gpu_ko="${SRC}/.tmp/gpu_modules_${LINUXFAMILY}/pvrsrvkm.ko"
+	kernel_id=$( {
+		improved_git --git-dir="${LINUXSOURCEDIR}/.git" rev-parse HEAD
+		sha256sum < "${EXTER}/config/kernel/${LINUXCONFIG}.config"
+		printf '%s\n' "${IMAGE_KERNEL_OPTIONS[@]}"
+	} | sha256sum | cut -c1-16)
+	kernel_cache="${DEST}/debs/kernel/${BRANCH}-${kernel_id}"
 
-	if [[ ! -f ${DEB_STORAGE}/${CHOSEN_KERNEL}_${REVISION}_${ARCH}.deb ]]; then 
-
+	if [[ ${KERNEL_CONFIGURE} != yes && -f ${kernel_cache}/${kernel_debs[0]} && -f ${kernel_cache}/pvrsrvkm.ko ]]; then
+		display_alert "Using cached kernel" "${kernel_cache}" "info"
+		mkdir -p "${DEB_STORAGE}" "${gpu_ko%/*}"
+		cp -f "${kernel_debs[@]/#/${kernel_cache}/}" "${DEB_STORAGE}/"
+		cp -f "${kernel_cache}/pvrsrvkm.ko" "${gpu_ko}"
+		# The stamp describes the last module built here, not this restored one.
+		rm -f "${gpu_ko%/*}/.stamp"
+	else
 		KDEB_CHANGELOG_DIST=$RELEASE
-		if [[ ${REPOSITORY_INSTALL} != *kernel* ]]; then
-			compile_kernel
-			SUN60IW2_GPU_BUILT=yes
-		fi
+		compile_kernel
+		mkdir -p "${kernel_cache}"
+		cp -f "${kernel_debs[@]/#/${DEB_STORAGE}/}" "${gpu_ko}" "${kernel_cache}/" \
+			|| exit_with_error "Kernel cache was not written" "${kernel_cache}"
 	fi
-	# A cached linux-image package skips compile_kernel, and pvrsrvkm with it.
-	[[ ${SUN60IW2_GPU_BUILT} != yes ]] && compile_sun60iw2_gpu_module "${LINUXSOURCEDIR}"
 
 	if [[ $BUILD_OPT == "kernel" ]]; then
 		unset BUILD_MINIMAL BUILD_DESKTOP COMPRESS_OUTPUTIMAGE
@@ -552,8 +531,6 @@ runtime=$(((end-start)/60))
 display_alert "Runtime" "$runtime min" "info"
 
 # Make it easy to repeat build by displaying build options used
-[ "$(systemd-detect-virt)" == 'docker' ] && BUILD_CONFIG='docker'
-
 display_alert "Repeat Build Options" "sudo ./build.sh ${BUILD_CONFIG} BOARD=${BOARD} BRANCH=${BRANCH} \
 $([[ -n $BUILD_OPT ]] && echo "BUILD_OPT=${BUILD_OPT} ")\
 $([[ -n $RELEASE ]] && echo "RELEASE=${RELEASE} ")\

@@ -46,6 +46,7 @@ esac
 root_uuid=$(sed -e 's/^.*root=//' -e 's/ .*$//' < /proc/cmdline)
 root_partition=$(blkid | tr -d '":' | grep "${root_uuid}" | awk '{print $1}')
 root_partition_device="${root_partition::-2}"
+root_disk=$(lsblk -no PKNAME "${root_partition}" 2>/dev/null)
 
 # find targets: NAND, EMMC, SATA, SPI flash, NVMe
 [[ -b /dev/nand ]] && nandcheck=$(ls -d -1 /dev/nand* | grep -w 'nand' | awk '{print $NF}');
@@ -357,7 +358,11 @@ create_orangepi()
 	# Boot from SPI, root = SATA / USB
 	#
 	if [[ $1 == *spi* || $1 == "ufs" ]]; then
-		sed -e 's,rootdev=.*,rootdev='"$satauuid"',g' -i "${TempDir}"/rootfs/boot/orangepiEnv.txt
+		local env_file="${TempDir}"/rootfs/boot/orangepiEnv.txt
+		sed -e 's,rootdev=.*,rootdev='"$satauuid"',g' -i "$env_file"
+		grep -q '^rootdev' "$env_file" || echo "rootdev=$satauuid" >> "$env_file"
+		sed -e 's,rootfstype=.*,rootfstype='"$FilesystemChoosen"',g' -i "$env_file"
+		grep -q '^rootfstype' "$env_file" || echo "rootfstype=$FilesystemChoosen" >> "$env_file"
 		echo "$satauuid	/		$FilesystemChoosen	${mountopts[$FilesystemChoosen]}" >> "${TempDir}"/rootfs/etc/fstab
 	fi
 
@@ -692,7 +697,7 @@ main()
 	[[ ( $LINUXFAMILY == odroidxu4 || $LINUXFAMILY == mvebu* || $LINUXFAMILY == mt7623 ) && ( -b /dev/mmcblk0boot0 || -b /dev/mmcblk1boot0 ) ]] && options+=(6 'Install/Update the bootloader on special eMMC partition')
 	[[ -n $spicheck && $(type -t write_uboot_platform_mtd) == function ]] && options+=(7 'Install/Update the bootloader on SPI Flash')
 	[[ -n $ufscheck && $(type -t write_uboot_platform_ufs) == function ]] && options+=(8 'Boot from UFS - system on UFS')
-	[[ -n $ufscheck && $(type -t write_uboot_platform_ufs) == function && $DISK_ROOT_PART =~ $root_partition_device ]] && options+=(9 'Install/Update the bootloader on UFS')
+	[[ -n $ufscheck && $(type -t write_uboot_platform_ufs) == function && -n $root_disk && $(realpath /sys/block/$root_disk/device) == *".ufs"* ]] && options+=(9 'Install/Update the bootloader on UFS')
 
 	[[ ${#options[@]} -eq 0 || "$root_uuid" == "$emmcuuid" || "$root_uuid" == "/dev/nand2" ]] && \
 	dialog --ok-label 'Cancel' --title ' Warning ' --backtitle "$backtitle" --colors --no-collapse --msgbox '\n\Z1There are no targets. Please check your drives.\Zn' 7 52
@@ -799,7 +804,7 @@ main()
 				;;
 			9)
 				show_warning 'This script will update the bootloader on UFS. Continue?'
-				write_uboot_platform_ufs "$DIR" "${root_partition_device}"
+				write_uboot_platform_ufs "$DIR" "/dev/${root_disk}"
 				update_bootscript
 				dialog --backtitle "$backtitle" --title 'Writing bootloader' --msgbox '\n          Done.' 7 30
 				return

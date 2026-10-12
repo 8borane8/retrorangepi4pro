@@ -938,20 +938,21 @@ POST_UMOUNT_FINAL_IMAGE
 
 		if [[ $COMPRESS_OUTPUTIMAGE == *xz* ]]; then
 			display_alert "Compressing" "${DESTIMG}/${version}.img.xz" "info"
-			# compressing consumes a lot of memory we don't have. Waiting for previous packing job to finish helps to run a lot more builds in parallel
+			# xz itself, not pixz: pixz shows no progress and holds many blocks in memory, which
+			# looks like a hang on a small machine. pv shows the progress.
 			available_cpu=$(grep -c 'processor' /proc/cpuinfo)
-			[[ ${BUILD_ALL} == yes ]] && available_cpu=$(( $available_cpu * 30 / 100 )) # lets use 20% of resources in case of build-all
 			[[ ${available_cpu} -gt 8 ]] && available_cpu=8 # using more cpu cores for compressing is pointless
-			available_mem=$(LC_ALL=c free | grep Mem | awk '{print $4/$2 * 100.0}' | awk '{print int($1)}') # in percentage
-			# build optimisations when memory drops below 5%
-			if [[ ${BUILD_ALL} == yes && ( ${available_mem} -lt 15 || $(ps -uax | grep "pixz" | wc -l) -gt 4 )]]; then
-				while [[ $(ps -uax | grep "pixz" | wc -l) -gt 2 ]]
-					do echo -en "#"
-					sleep 20
-				done
+			[[ ${available_cpu} -lt 1 ]] && available_cpu=1
+			pv -p -b -r -c -N "[ .... ] xz" "${DESTIMG}/${version}.img" | xz -T"${available_cpu}" -6 > "${DESTIMG}/${version}.img.xz"
+			xz_status=("${PIPESTATUS[@]}")
+			if [[ ${xz_status[0]} -eq 0 && ${xz_status[1]} -eq 0 ]]; then
+				compression_type=".xz"
+			else
+				# The raw image is deleted after a successful compression only. Keep it here.
+				display_alert "Compression failed, keeping the raw image" "${version}.img" "wrn"
+				rm -f "${DESTIMG}/${version}.img.xz"
+				compression_type=""
 			fi
-			pixz -7 -p ${available_cpu} -f $(expr ${available_cpu} + 2) < $DESTIMG/${version}.img > ${DESTIMG}/${version}.img.xz
-			compression_type=".xz"
 		fi
 
 		if [[ $COMPRESS_OUTPUTIMAGE == *img* || $COMPRESS_OUTPUTIMAGE == *7z* ]]; then

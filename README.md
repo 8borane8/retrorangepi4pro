@@ -88,7 +88,7 @@ Every image has the Orange Pi NPU runtime (`libVIPhal.so`, `libNBGlinker.so` and
 
 ## Flash
 
-Write the `.img.xz` file in `output/images/` to a microSD card with Balena Etcher, which reads it compressed, or with `xzcat image.img.xz | sudo dd of=/dev/sdX bs=4M` on Linux. Set `COMPRESS_OUTPUTIMAGE="img"` in `image.conf` to get a raw `.img` instead. Boot the Orange Pi 4 Pro from that card.
+Write the `.img.xz` file in `output/images/` to a microSD card with Balena Etcher, which reads it compressed, or with `xzcat image.img.xz | sudo dd of=/dev/sdX bs=4M` on Linux. Compression runs `xz` with a progress bar, and takes several minutes on a small machine. If it fails, the raw `.img` is kept instead of being lost. Set `COMPRESS_OUTPUTIMAGE="img"` in `image.conf` to skip compression and get a raw `.img`. Boot the Orange Pi 4 Pro from that card.
 
 Log in with the username and password from `image.conf`. The defaults are `orangepi` / `orangepi`.
 

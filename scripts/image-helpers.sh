@@ -100,14 +100,23 @@ check_loop_device()
 {
 
 	local device=$1
-	if [[ ! -b $device ]]; then
-		if [[ $CONTAINER_COMPAT == yes && -b /tmp/$device ]]; then
+	local sysdev="/sys/class/block/${device##*/}/dev"
+	local node
+
+	# udev creates partition nodes after losetup -P returns, and not at all in some VMs and containers.
+	[[ -b $device ]] || udevadm settle --timeout=10 >/dev/null 2>&1
+
+	# A node left by an earlier build can point at another partition: loop partition minors are dynamic.
+	if [[ -f $sysdev ]]; then
+		[[ -b $device ]] && node=$(printf '%d:%d' "0x$(stat -c '%t' "$device")" "0x$(stat -c '%T' "$device")")
+		if [[ $node != "$(cat "$sysdev")" ]]; then
 			display_alert "Creating device node" "$device"
-			mknod -m0660 "${device}" b "0x$(stat -c '%t' "/tmp/$device")" "0x$(stat -c '%T' "/tmp/$device")"
-		else
-			exit_with_error "Device node $device does not exist"
+			rm -f "$device"
+			mknod -m0660 "$device" b "$(cut -d: -f1 "$sysdev")" "$(cut -d: -f2 "$sysdev")"
 		fi
 	fi
+
+	[[ -b $device ]] || exit_with_error "Device node $device does not exist"
 
 }
 

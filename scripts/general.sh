@@ -1439,7 +1439,6 @@ prepare_host()
 			display_alert "apt-cacher is disabled in containers, set NO_APT_CACHER=no to override" "" "wrn"
 			NO_APT_CACHER=yes
 		fi
-		CONTAINER_COMPAT=yes
 		# trying to use nested containers is not a good idea, so don't permit EXTERNAL_NEW=compile
 		if [[ $EXTERNAL_NEW == compile ]]; then
 			display_alert "EXTERNAL_NEW=compile is not available when running in container, setting to prebuilt" "" "wrn"

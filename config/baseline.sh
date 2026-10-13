@@ -190,6 +190,49 @@ baseline_install_wiringop() {
 	fi
 }
 
+# Some programs want desktop OpenGL (ES-DE, for one) or fail on the GPU stack in other ways. The GPU
+# driver has no desktop OpenGL and its X server has no GLX. nogpu runs one program without the GPU:
+# OpenGL on the CPU through EGL (Mesa llvmpipe, which needs neither GLX nor the GPU driver), and
+# software drawing for GTK and Qt. The PowerVR libraries come first in the library path, so the
+# Mesa ones are put ahead for that program only.
+post_family_tweaks__baseline_nogpu() {
+	[[ "${BUILD_DESKTOP}" == "yes" ]] || return 0
+	install_available_packages libegl-mesa0 libgl1-mesa-dri
+	mkdir -p "${SDCARD}/usr/local/bin"
+
+	cat > "${SDCARD}/usr/local/bin/nogpu" << 'EOF'
+#!/bin/sh
+# Run a program without the GPU. Usage: nogpu PROGRAM [ARGUMENTS...]
+if [ "$#" -eq 0 ]; then
+	echo "usage: nogpu PROGRAM [ARGUMENTS...]" >&2
+	exit 2
+fi
+
+# OpenGL programs (SDL, ES-DE): Mesa on the CPU through EGL.
+LD_LIBRARY_PATH="/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH
+export SDL_VIDEO_X11_FORCE_EGL=1
+export LIBGL_ALWAYS_SOFTWARE=1
+
+# GTK and Qt: draw without OpenGL.
+export GSK_RENDERER=cairo
+export GDK_GL=disable
+export GDK_DEBUG="gl-disable${GDK_DEBUG:+,$GDK_DEBUG}"
+export QT_XCB_GL_INTEGRATION=none
+export QT_QUICK_BACKEND=software
+
+# Vulkan programs: Mesa's CPU driver, when mesa-vulkan-drivers is installed.
+for icd in /usr/share/vulkan/icd.d/lvp_icd*.json; do
+	if [ -f "$icd" ]; then
+		export VK_DRIVER_FILES="$icd" VK_ICD_FILENAMES="$icd"
+		break
+	fi
+done
+
+exec "$@"
+EOF
+	chmod 755 "${SDCARD}/usr/local/bin/nogpu"
+}
 post_family_tweaks__baseline_system_tools() {
 	[[ ${BUILD_MINIMAL} == yes ]] && return 0
 	# nvme-cli and smartmontools read NVMe health. earlyoom ends the biggest process

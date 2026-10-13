@@ -74,6 +74,10 @@ Check on the board with `vulkaninfo --summary` or `clinfo`. Both should name the
 
 The driver has no desktop OpenGL and no GLX, only EGL with GLES 1 to 3, Vulkan, and OpenCL. An app that asks for a GLX or desktop OpenGL context gets no GL. It has to use EGL with GLES, or Vulkan.
 
+Desktop images carry one command for any app that fails on the GPU stack: `nogpu PROGRAM`, for example `nogpu ./ES-DE_aarch64.AppImage`. It draws OpenGL on the CPU with Mesa's llvmpipe, through EGL, so it needs neither GLX nor the GPU driver. It also makes GTK and Qt draw without OpenGL, and points Vulkan programs at Mesa's CPU driver when `mesa-vulkan-drivers` is installed. Chrome and other Chromium or Electron apps take a flag instead: `--disable-gpu`.
+
+`nogpu` only changes the environment of that one program, but a program that starts others passes it on: an emulator launched from a frontend run through `nogpu` is also drawn in software.
+
 ## Video encoding
 
 Every image has Allwinner's video engine library, libcedarc, with `demoVencoder` to test the H.264 and H.265 encoder. Server and desktop images also have GStreamer with Allwinner's OMX plugin, which encodes H.264 and MJPEG in hardware:

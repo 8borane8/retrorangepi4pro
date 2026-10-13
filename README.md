@@ -52,7 +52,7 @@ There is no firewall. USB storage, exFAT and NTFS work on every profile.
 ## Desktop
 
 - **Basics:** the desktop packages are installed without their optional extras, so the image adds what apps usually need. That means USB drive mounting, sound sharing, emoji fonts, H.264 in GStreamer, `jstest` for gamepads, and the libraries Qt AppImages need. A package missing on one release is skipped with a warning, and the build goes on.
-- **Smoothness:** the window compositor is off. The graphics driver has no GLX, so compositing would run on the CPU and slow the desktop down. You can turn it back on in Settings > Window Manager Tweaks > Compositor.
+- **Smoothness:** the desktop is drawn by the CPU (`AccelMethod "none"` in `/etc/X11/xorg.conf.d/20-modesetting.conf`) and the window compositor is off. The display only redraws whole frames, so GPU drawing made the pointer flicker and the desktop lag. Games and Chrome still use the GPU directly. You can turn the compositor back on in Settings > Window Manager Tweaks > Compositor.
 - **No video player:** install one with `sudo apt install mpv` or `vlc`.
 
 ## Pins: GPIO, I2C, SPI

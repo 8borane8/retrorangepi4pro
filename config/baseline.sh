@@ -190,6 +190,18 @@ baseline_install_wiringop() {
 	fi
 }
 
+# The desktop packages are installed without their recommended packages, and no app group is
+# selected. This adds the few that apps quietly expect: mounting USB drives from the file
+# manager, ALSA programs sharing the sound card with PulseAudio, emoji, H.264 in GStreamer
+# apps, the gamepad test tool, and the X11/OpenGL libraries Qt AppImages link to.
+post_family_tweaks__baseline_desktop_basics() {
+	[[ "${BUILD_DESKTOP}" == "yes" ]] || return 0
+	install_available_packages \
+		udisks2 libasound2-plugins fonts-noto-color-emoji gstreamer1.0-libav joystick \
+		libopengl0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+		libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-xkb1
+}
+
 # Some programs want desktop OpenGL (ES-DE, for one) or fail on the GPU stack in other ways. The GPU
 # driver has no desktop OpenGL and its X server has no GLX. nogpu runs one program without the GPU:
 # OpenGL on the CPU through EGL (Mesa llvmpipe, which needs neither GLX nor the GPU driver), and

@@ -293,7 +293,7 @@ desktop_postinstall ()
 		run_on_sdcard "DEBIAN_FRONTEND=noninteractive apt-get -yqq --no-install-recommends install $PACKAGE_LIST_DESKTOP_FAMILY"
 	fi
 
-	if [[ -d ${SDCARD}/etc/lightdm ]]; then
+	if [[ -d ${SDCARD}/etc/lightdm && ${DESKTOP_AUTOLOGIN} != no ]]; then
 		mkdir -p ${SDCARD}/etc/lightdm/lightdm.conf.d
 		cat <<-EOF > ${SDCARD}/etc/lightdm/lightdm.conf.d/22-orangepi-autologin.conf
 		[Seat:*]

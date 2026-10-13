@@ -214,6 +214,42 @@ post_family_tweaks__baseline_desktop_basics() {
 			|| display_alert "xrdp's Xorg config was not changed" "${xrdp_conf}" "wrn"
 	fi
 }
+# x11vnc shows the screen of the board (the session already open on it) to a VNC viewer on port
+# 5900. xrdp cannot do that: it opens a separate desktop, which does not work for the user that
+# is already logged in on the screen. The VNC password is the first 8 characters of the
+# user's password at build time (a VNC limit); `sudo x11vnc -storepasswd` changes it.
+# If anything here fails the image is still built, without screen sharing.
+post_family_tweaks__baseline_screen_share() {
+	[[ "${BUILD_DESKTOP}" == "yes" ]] || return 0
+	install_available_packages x11vnc
+	[[ -x "${SDCARD}/usr/bin/x11vnc" ]] || return 0
+
+	local vnc_pass
+	vnc_pass=$(printf '%q' "${OPI_PWD:0:8}")
+	if ! chroot "${SDCARD}" /bin/bash -c "x11vnc -storepasswd ${vnc_pass} /etc/x11vnc.pass && chmod 600 /etc/x11vnc.pass" \
+		>> "${DEST}"/${LOG_SUBPATH}/install.log 2>&1; then
+		display_alert "Screen sharing is not in this image" "x11vnc password failed" "wrn"
+		return 0
+	fi
+
+	cat > "${SDCARD}/etc/systemd/system/x11vnc.service" << 'EOF'
+[Unit]
+Description=Share the screen over VNC
+After=display-manager.service
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/x11vnc -display :0 -auth guess -rfbauth /etc/x11vnc.pass -forever -shared -noxdamage
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical.target
+EOF
+	chroot "${SDCARD}" /bin/bash -c "systemctl --no-reload enable x11vnc.service" \
+		>> "${DEST}"/${LOG_SUBPATH}/install.log 2>&1 \
+		|| display_alert "Screen sharing is not enabled" "x11vnc.service" "wrn"
+}
 post_family_tweaks__baseline_system_tools() {
 	[[ ${BUILD_MINIMAL} == yes ]] && return 0
 	# nvme-cli and smartmontools read NVMe health. earlyoom ends the biggest process

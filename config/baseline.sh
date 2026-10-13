@@ -191,59 +191,28 @@ baseline_install_wiringop() {
 }
 
 # The desktop packages are installed without their recommended packages, and no app group is
-# selected. This adds the few that apps quietly expect: mounting USB drives from the file
-# manager, ALSA programs sharing the sound card with PulseAudio, emoji, H.264 in GStreamer
-# apps, the gamepad test tool, and the X11/OpenGL libraries Qt AppImages link to.
+# selected. This adds what apps quietly expect: mounting USB drives from the file manager,
+# ALSA programs sharing the sound card with PulseAudio, emoji, H.264 in GStreamer apps, the
+# gamepad test tool, the X11/OpenGL libraries Qt AppImages link to, and Mesa's software OpenGL
+# (the desktop is drawn by the CPU; programs that want the GPU use Vulkan).
+# xrdp gives remote desktop on port 3389. Its own Xorg would also load the display's
+# "modesetting" device from /etc/X11/xorg.conf.d and fail with "Cannot open /dev/tty0". Giving
+# its screen number 1 keeps Xorg from loading that GPU (xrdp issue 3504).
 post_family_tweaks__baseline_desktop_basics() {
 	[[ "${BUILD_DESKTOP}" == "yes" ]] || return 0
 	install_available_packages \
 		udisks2 libasound2-plugins fonts-noto-color-emoji gstreamer1.0-libav joystick \
+		libgl1-mesa-dri libglx-mesa0 \
 		libopengl0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
-		libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-xkb1
-}
+		libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-xkb1 \
+		xrdp xorgxrdp
 
-# Some programs want desktop OpenGL (ES-DE, for one) or fail on the GPU stack in other ways. The GPU
-# driver has no desktop OpenGL and its X server has no GLX. nogpu runs one program without the GPU:
-# OpenGL on the CPU through EGL (Mesa llvmpipe, which needs neither GLX nor the GPU driver), and
-# software drawing for GTK and Qt. The PowerVR libraries come first in the library path, so the
-# Mesa ones are put ahead for that program only.
-post_family_tweaks__baseline_nogpu() {
-	[[ "${BUILD_DESKTOP}" == "yes" ]] || return 0
-	install_available_packages libegl-mesa0 libgl1-mesa-dri
-	mkdir -p "${SDCARD}/usr/local/bin"
-
-	cat > "${SDCARD}/usr/local/bin/nogpu" << 'EOF'
-#!/bin/sh
-# Run a program without the GPU. Usage: nogpu PROGRAM [ARGUMENTS...]
-if [ "$#" -eq 0 ]; then
-	echo "usage: nogpu PROGRAM [ARGUMENTS...]" >&2
-	exit 2
-fi
-
-# OpenGL programs (SDL, ES-DE): Mesa on the CPU through EGL.
-LD_LIBRARY_PATH="/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export LD_LIBRARY_PATH
-export SDL_VIDEO_X11_FORCE_EGL=1
-export LIBGL_ALWAYS_SOFTWARE=1
-
-# GTK and Qt: draw without OpenGL.
-export GSK_RENDERER=cairo
-export GDK_GL=disable
-export GDK_DEBUG="gl-disable${GDK_DEBUG:+,$GDK_DEBUG}"
-export QT_XCB_GL_INTEGRATION=none
-export QT_QUICK_BACKEND=software
-
-# Vulkan programs: Mesa's CPU driver, when mesa-vulkan-drivers is installed.
-for icd in /usr/share/vulkan/icd.d/lvp_icd*.json; do
-	if [ -f "$icd" ]; then
-		export VK_DRIVER_FILES="$icd" VK_ICD_FILENAMES="$icd"
-		break
+	local xrdp_conf="${SDCARD}/etc/X11/xrdp/xorg.conf"
+	if [[ -f "${xrdp_conf}" ]]; then
+		sed -i 's/^\([[:space:]]*\)Screen[[:space:]]*"Screen (xrdpdev)"/\1Screen 1 "Screen (xrdpdev)"/' "${xrdp_conf}"
+		grep -q 'Screen 1 "Screen (xrdpdev)"' "${xrdp_conf}" \
+			|| display_alert "xrdp's Xorg config was not changed" "${xrdp_conf}" "wrn"
 	fi
-done
-
-exec "$@"
-EOF
-	chmod 755 "${SDCARD}/usr/local/bin/nogpu"
 }
 post_family_tweaks__baseline_system_tools() {
 	[[ ${BUILD_MINIMAL} == yes ]] && return 0

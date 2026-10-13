@@ -52,7 +52,9 @@ There is no firewall. USB storage, exFAT and NTFS work on every profile.
 ## Desktop
 
 - **Basics:** the desktop packages are installed without their optional extras, so the image adds what apps usually need. That means USB drive mounting, sound sharing, emoji fonts, H.264 in GStreamer, `jstest` for gamepads, and the libraries Qt AppImages need. A package missing on one release is skipped with a warning, and the build goes on.
-- **Smoothness:** the desktop is drawn by the CPU (`AccelMethod "none"` in `/etc/X11/xorg.conf.d/20-modesetting.conf`) and the window compositor is off. The display only redraws whole frames, so GPU drawing made the pointer flicker and the desktop lag. Games and Chrome still use the GPU directly. You can turn the compositor back on in Settings > Window Manager Tweaks > Compositor.
+- **Drawing:** the desktop is drawn by the CPU, with Mesa's software OpenGL, on the distribution's own Xorg. The display only redraws whole frames, so GPU drawing made the pointer flicker and the desktop lag. The window compositor is off (Settings > Window Manager Tweaks > Compositor turns it back on).
+- **GPU apps:** programs that talk to the GPU directly, like Chrome (ANGLE on Vulkan) and Vulkan games or emulators, use it as usual.
+- **Remote desktop:** `xrdp` is installed. Connect with any RDP client to the board's address on port 3389 and log in with the board's username and password.
 - **No video player:** install one with `sudo apt install mpv` or `vlc`.
 
 ## Pins: GPIO, I2C, SPI
@@ -72,26 +74,11 @@ wiringOP is built while the image is made. If that fails, the image is still pro
 
 The PowerVR GPU driver is on every console image, for compute. Desktop images get it on `resolute`, `trixie` and `bullseye`. `bookworm` and `jammy` desktops use software rendering.
 
-The driver offers EGL with GLES, Vulkan and OpenCL. It has **no desktop OpenGL and no GLX**, so apps that need those do not start. Check the GPU on the board with `vulkaninfo --summary` or `clinfo`.
+The driver offers EGL with GLES, Vulkan and OpenCL, and no desktop OpenGL. Check it on the board with `vulkaninfo --summary` or `clinfo`. Orange Pi publishes the driver in one package that also carries its own Xorg. The image installs the package for the GPU libraries and then puts the distribution's Xorg back, so desktop OpenGL (GLX) works through Mesa on the CPU.
 
-A few choices were made because of this driver:
-
-- The Xorg server is the one Orange Pi ships, and it is held so an update does not replace it.
-- GTK4 draws with Cairo, because its GL renderer crashes.
-- The mouse cursor is drawn in software, because the hardware cursor flickers.
+- The PowerVR libraries come first in the library path. A program that loads EGL gets the GPU's, which only offers GLES.
+- GTK4 draws with Cairo, to stay off that path.
 - Chrome starts with ANGLE on Vulkan. A Chrome update removes those flags.
-
-### Running an app without the GPU: `nogpu`
-
-Desktop images have one command for any app that fails on the GPU:
-
-```bash
-nogpu ./ES-DE_aarch64.AppImage
-```
-
-It draws OpenGL on the CPU (Mesa llvmpipe), and makes GTK and Qt apps draw without OpenGL. For Chrome and other Chromium or Electron apps, use `--disable-gpu` instead.
-
-`nogpu` only changes the environment of that program. A program it starts, like an emulator launched from a frontend, is drawn in software too.
 
 ## Video encoding
 
